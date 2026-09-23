@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+
+# IDE
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Raw / generated datasets
+backend/data/*.csv
+backend/data/*.zip
+
+# Keep experiment results
+!backend/data/model_results_baseline.csv
+!backend/data/model_results_v1.csv
+!backend/data/model_results_v2.csv
+!backend/data/model_results_v3_no_ip.csv
+!backend/data/threshold_results_v2.csv
+
+# Local dataset
+backend/advertising.csv
+
+# Legacy pipeline files
+backend/app_old.py
+backend/pipeline_old.py
+backend/train.py
+
+# Legacy model artifacts
+backend/model/model.pkl
+backend/model/scaler.pkl
+backend/model/features.json
+backend/model/stats.json

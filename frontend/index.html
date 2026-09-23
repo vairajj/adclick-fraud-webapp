@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ad Click Fraud Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,5
+00;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">AF</span>
+    <div>
+      <h1>Ad Click Attribution &amp; Suspicious Click Detection</h1>
+      <p class="subtitle">Behavioral ad-click attribution analysis using historical click patterns</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+    <button class="tab" data-tab="predictor" role="tab" aria-selected="false">Live Check</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============ DASHBOARD ============ -->
+<section id="dashboard" class="panel-view active">
+
+  <div id="dashboard-loading" class="state-msg">
+    Loading V2 model information...
+  </div>
+
+  <div id="dashboard-error" class="state-msg error hidden">
+    Unable to load model information. Make sure the FastAPI backend is running.
+  </div>
+
+  <div id="dashboard-content" class="hidden">
+
+    <!-- ==================== OVERVIEW ==================== -->
+
+    <div class="hero-row">
+
+      <div class="hero-card">
+        <span class="hero-label">Deployed model</span>
+        <span class="hero-value" id="best-model-name">Random Forest</span>
+        <span class="hero-sub" id="best-model-sub">
+          V2 behavioral feature pipeline
+        </span>
+      </div>
+
+      <div class="stat-card">
+        <span class="stat-label">Dataset size</span>
+        <span class="stat-value" id="stat-rows">99,999</span>
+      </div>
+
+      <div class="stat-card">
+        <span class="stat-label">Attribution rate</span>
+        <span class="stat-value" id="stat-fraud-rate">0.227%</span>
+      </div>
+
+      <div class="stat-card">
+        <span class="stat-label">V2 features</span>
+        <span class="stat-value">20</span>
+      </div>
+
+    </div>
+
+
+    <!-- ==================== MODEL PERFORMANCE ==================== -->
+
+    <div class="grid-2">
+
+      <div class="card">
+
+        <h2>V2 model performance</h2>
+
+        <p class="card-note">
+          Performance on the chronological hold-out test set.
+        </p>
+
+        <canvas id="modelChart" height="260"></canvas>
+
+      </div>
+
+
+      <div class="card">
+
+        <h2>V2 feature groups</h2>
+
+        <p class="card-note">
+          Feature categories used by the deployed behavioral model.
+        </p>
+
+        <canvas id="importanceChart" height="260"></canvas>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================== PERFORMANCE SUMMARY ==================== -->
+
+    <div class="card">
+
+      <h2>Test-set performance</h2>
+
+      <p class="card-note">
+        The V2 model was evaluated using a chronological train/test split.
+        The test set contains 28,561 clicks and 59 attributed clicks.
+      </p>
+
+      <div class="confusion-grid performance-grid">
+
+  <div class="cm-cell cm-correct">
+    <span class="cm-count">0.9776</span>
+    <span class="cm-label">ROC-AUC</span>
+  </div>
+
+  <div class="cm-cell cm-correct">
+    <span class="cm-count">0.3008</span>
+    <span class="cm-label">PR-AUC</span>
+  </div>
+
+  <div class="cm-cell cm-correct">
+    <span class="cm-count">21.29%</span>
+    <span class="cm-label">Precision</span>
+  </div>
+
+  <div class="cm-cell cm-correct">
+    <span class="cm-count">72.88%</span>
+    <span class="cm-label">Recall</span>
+  </div>
+
+  <div class="cm-cell cm-correct">
+    <span class="cm-count">32.95%</span>
+    <span class="cm-label">F1 Score</span>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ==================== RESULTS TABLE ==================== -->
+
+    <div class="card">
+
+      <h2>Model comparison</h2>
+
+      <p class="card-note">
+        Metrics are loaded from the saved experiment result CSVs. V1 uses
+        full-dataset frequency features that include future events, so treat
+        its scores as exploratory rather than a leakage-safe comparison.
+      </p>
+
+      <table id="results-table" class="data-table">
+
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>Model</th>
+            <th>Precision</th>
+            <th>Recall</th>
+            <th>F1</th>
+            <th>ROC-AUC</th>
+            <th>PR-AUC</th>
+          </tr>
+        </thead>
+
+        <tbody></tbody>
+
+      </table>
+
+    </div>
+
+
+    <!-- ==================== METHODOLOGY ==================== -->
+
+    <div class="card">
+
+      <h2>Behavioral feature pipeline</h2>
+
+      <p class="card-note">
+        Unlike the original prototype, V2 generates historical behavioral
+        features from clicks observed before the current event. The five groups
+        below account for all 20 features used by the deployed model.
+      </p>
+
+      <div id="feature-group-grid" class="feature-group-grid" aria-label="All V2 model features by group"></div>
+
+      <p class="card-note">
+        Historical features are calculated before the current click is
+        added to the session history, preventing the current event from
+        influencing its own behavioral features.
+      </p>
+
+    </div>
+
+  </div>
+
+</section>
+
+  <!-- ============ LIVE PREDICTOR ============ -->
+  <section id="predictor" class="panel-view">
+    <div class="predictor-grid">
+
+      <form id="predict-form" class="card form-card">
+  <h2>Check a click</h2>
+
+  <p class="card-note">
+    Enter click and device details to analyze the click using
+    historical behavioral features.
+  </p>
+
+  <label>
+    IP address ID
+    <input
+      type="number"
+      name="ip"
+      min="0"
+      value="5348"
+      required
+    >
+  </label>
+
+  <label>
+    App ID
+    <input
+      type="number"
+      name="app"
+      min="0"
+      value="19"
+      required
+    >
+  </label>
+
+  <label>
+    Device ID
+    <input
+      type="number"
+      name="device"
+      min="0"
+      value="1"
+      required
+    >
+  </label>
+
+  <label>
+    Operating System ID
+    <input
+      type="number"
+      name="os"
+      min="0"
+      value="13"
+      required
+    >
+  </label>
+
+  <label>
+    Channel ID
+    <input
+      type="number"
+      name="channel"
+      min="0"
+      value="213"
+      required
+    >
+  </label>
+
+  <label>
+    Click time
+    <input
+      type="datetime-local"
+      name="click_time"
+      value="2017-11-09T10:00"
+      required
+    >
+  </label>
+
+  <button type="submit" class="btn-primary">
+    Analyze this click
+  </button>
+</form>
+
+      <div class="card result-card">
+        <h2>Result</h2>
+        <div id="result-empty" class="state-msg">Submit the form to screen a click.</div>
+        <div id="result-content" class="hidden">
+          <div class="verdict" id="verdict-badge">—</div>
+          <div class="meter-wrap">
+            <div class="meter-track"><div class="meter-fill" id="meter-fill"></div></div>
+            <span class="meter-label" id="meter-label">0%</span>
+          </div>
+          <h3>Behavioral signals</h3>
+          <ul id="factors-list" class="factors-list"></ul>
+        </div>
+        <div id="result-error" class="state-msg error hidden"></div>
+      </div>
+
+    </div>
+    <div class="card prediction-history-card">
+
+  <div class="history-header">
+    <div>
+      <h2>Recent prediction history</h2>
+      <p class="card-note">
+        Predictions generated during the current backend session.
+      </p>
+    </div>
+
+    <button
+      type="button"
+      id="reset-history"
+      class="btn-secondary"
+    >
+      Reset session
+    </button>
+  </div>
+
+  <div class="history-table-wrap">
+
+    <table
+      id="prediction-history-table"
+      class="data-table"
+    >
+
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>IP</th>
+          <th>App</th>
+          <th>Device</th>
+          <th>Probability</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+
+      <tbody id="prediction-history-body">
+        <tr>
+          <td colspan="6">
+            No predictions yet.
+          </td>
+        </tr>
+      </tbody>
+
+    </table>
+
+  </div>
+
+</div>
+  </section>
+
+</main>
+
+<footer>
+  <p>Final-year project · UVCE · ML pipeline based on Alzahrani, Aljabri &amp; Mohammad (IEEE Access, 2025)</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
