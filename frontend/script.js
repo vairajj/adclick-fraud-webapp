@@ -1,64 +1,5 @@
-const API = ""; // same origin
 
-const V2_FEATURE_GROUPS = [
-  {
-    label: "Basic categorical IDs",
-    features: ["ip", "app", "device", "os", "channel"]
-  },
-  {
-    label: "Historical count features",
-    features: [
-      "ip_prev_clicks",
-      "app_prev_clicks",
-      "device_prev_clicks",
-      "os_prev_clicks",
-      "channel_prev_clicks"
-    ]
-  },
-  {
-    label: "IP interaction counts",
-    features: [
-      "ip_app_prev_clicks",
-      "ip_device_prev_clicks",
-      "ip_os_prev_clicks",
-      "ip_channel_prev_clicks"
-    ]
-  },
-  {
-    label: "Previous-click time gaps",
-    features: [
-      "seconds_since_prev_ip_click",
-      "seconds_since_prev_ip_app_click",
-      "seconds_since_prev_ip_device_click"
-    ]
-  },
-  {
-    label: "Temporal features",
-    features: ["hour", "day", "day_of_week"]
-  }
-];
-
-function groupModelFeatures(features) {
-  const ungrouped = new Set(features);
-  const groups = V2_FEATURE_GROUPS.map(group => {
-    const included = group.features.filter(feature => {
-      if (!ungrouped.has(feature)) return false;
-      ungrouped.delete(feature);
-      return true;
-    });
-
-    return { label: group.label, features: included };
-  });
-
-  if (ungrouped.size > 0) {
-    groups.push({
-      label: "Other model features",
-      features: [...ungrouped]
-    });
-  }
-
-  return groups.filter(group => group.features.length > 0);
-}
+const API = "";
 
 // ============================================================
 // Tabs
@@ -66,351 +7,541 @@ function groupModelFeatures(features) {
 
 document.querySelectorAll(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
-
     document.querySelectorAll(".tab").forEach(t => {
       t.classList.remove("active");
       t.setAttribute("aria-selected", "false");
     });
 
-    document.querySelectorAll(".panel-view").forEach(p => {
-      p.classList.remove("active");
+    document.querySelectorAll(".panel-view").forEach(panel => {
+      panel.classList.remove("active");
     });
 
     tab.classList.add("active");
     tab.setAttribute("aria-selected", "true");
 
-    document
-      .getElementById(tab.dataset.tab)
-      .classList.add("active");
+    document.getElementById(tab.dataset.tab)?.classList.add("active");
   });
 });
-
 
 // ============================================================
 // Dashboard
 // ============================================================
 
+
+
 async function loadDashboard() {
+  const loading = document.getElementById("dashboard-loading");
+  const error = document.getElementById("dashboard-error");
+  const content = document.getElementById("dashboard-content");
 
   try {
+    const [healthResponse, modelResponse, statsResponse] =
+      await Promise.all([
+        fetch(`${API}/api/health`),
+        fetch(`${API}/api/model`),
+        fetch(`${API}/api/dashboard/stats`)
+      ]);
 
-    const res = await fetch(`${API}/api/stats`);
-
-    if (!res.ok) {
-      throw new Error("Backend not ready");
+    if (!healthResponse.ok || !modelResponse.ok || !statsResponse.ok) {
+      throw new Error("Could not load dashboard information.");
     }
 
-    const stats = await res.json();
+    const health = await healthResponse.json();
+    const model = await modelResponse.json();
+    const stats = await statsResponse.json();
 
-    document
-      .getElementById("dashboard-loading")
-      .classList.add("hidden");
+    updateLiveAnalytics(stats);
+    loading.classList.add("hidden");
+    error.classList.add("hidden");
+    content.classList.remove("hidden");
 
-    document
-      .getElementById("dashboard-content")
-      .classList.remove("hidden");
-
-
-    // --------------------------------------------------------
     // Model information
-    // --------------------------------------------------------
+    document.getElementById("best-model-name").textContent =
+      model.model || "LightGBM";
 
-    const modelName =
-      document.getElementById("best-model-name");
+    document.getElementById("best-model-sub").textContent =
+      "Experimental behavioural fraud detection model";
 
-    if (modelName) {
-      modelName.textContent = stats.model;
+    // Live prediction statistics
+    document.getElementById("stat-rows").textContent =
+      stats.total_predictions.toLocaleString();
+
+    document.getElementById("stat-fraud-rate").textContent =
+      stats.total_predictions > 0
+        ? `${((stats.suspicious_clicks / stats.total_predictions) * 100).toFixed(2)}%`
+        : "0.00%";
+
+    const featureCount = model.features?.length || 0;
+    const featureCard = document.getElementById("model-feature-count");
+
+    if (featureCard) {
+      featureCard.textContent = featureCount;
     }
 
+    // Update dataset/model warning
+    const note = document.getElementById("model-warning");
 
-    const modelSub =
-      document.getElementById("best-model-sub");
-
-    if (modelSub) {
-
-      modelSub.textContent =
-        `ROC-AUC ${stats.performance.roc_auc.toFixed(4)} · ` +
-        `PR-AUC ${stats.performance.pr_auc.toFixed(4)}`;
+    if (note) {
+      note.textContent = model.warning ||
+        "Experimental model. Results require independent validation.";
     }
 
+  } catch (err) {
+    console.error("Dashboard loading error:", err);
 
-    // --------------------------------------------------------
-    // Dataset statistics
-    // --------------------------------------------------------
+    loading.classList.add("hidden");
+    content.classList.add("hidden");
 
-    const rows =
-      document.getElementById("stat-rows");
-
-    if (rows) {
-      rows.textContent = "99,999";
-    }
-
-
-    const fraudRate =
-      document.getElementById("stat-fraud-rate");
-
-    if (fraudRate) {
-
-      // This is attribution rate, NOT confirmed fraud rate.
-      fraudRate.textContent = "0.227%";
-    }
-
-
-    const cmModel =
-      document.getElementById("cm-model-name");
-
-    if (cmModel) {
-      cmModel.textContent = stats.model;
-    }
-
-
-    // --------------------------------------------------------
-    // V2 performance chart
-    // --------------------------------------------------------
-
-    renderModelChart(stats);
-
-
-    // --------------------------------------------------------
-    // Feature information
-    // --------------------------------------------------------
-
-    renderFeatureChart(stats.features);
-    renderFeatureGroups(stats.features);
-
-
-    // --------------------------------------------------------
-    // Results table
-    // --------------------------------------------------------
-
-    renderResultsTable(stats);
-
-
-  } catch (e) {
-
-    console.error(e);
-
-    document
-      .getElementById("dashboard-loading")
-      .classList.add("hidden");
-
-    document
-      .getElementById("dashboard-error")
-      .classList.remove("hidden");
+    error.textContent = err.message;
+    error.classList.remove("hidden");
   }
 }
 
 
 // ============================================================
-// V2 Performance Chart
+// Live Prediction
 // ============================================================
 
-function renderModelChart(stats) {
+const predictForm = document.getElementById("predict-form");
 
-  const canvas =
-    document.getElementById("modelChart");
+if (predictForm) {
+  predictForm.addEventListener("submit", async event => {
+    event.preventDefault();
 
-  if (!canvas) {
-    return;
+    const submitButton = predictForm.querySelector(
+      'button[type="submit"]'
+    );
+
+    const errorElement = document.getElementById("result-error");
+    const emptyElement = document.getElementById("result-empty");
+    const contentElement = document.getElementById("result-content");
+
+    errorElement.classList.add("hidden");
+    contentElement.classList.add("hidden");
+    emptyElement.classList.add("hidden");
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Analyzing...";
+
+    const formData = Object.fromEntries(
+      new FormData(predictForm).entries()
+    );
+
+    const numericFields = [
+      "click_duration",
+      "scroll_depth",
+      "mouse_movement",
+      "keystrokes_detected",
+      "click_frequency",
+      "time_since_last_click",
+      "VPN_usage",
+      "proxy_usage"
+    ];
+
+    const payload = { ...formData };
+
+    numericFields.forEach(field => {
+      payload[field] = Number(formData[field]);
+    });
+
+    try {
+      const response = await fetch(`${API}/api/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || "Prediction request failed."
+        );
+      }
+
+      renderResult(result, payload);
+      await loadDashboard();
+      await loadPredictionHistory();
+
+    } catch (err) {
+      console.error("Prediction error:", err);
+
+      errorElement.textContent = err.message;
+      errorElement.classList.remove("hidden");
+
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Analyze this click";
+    }
+  });
+}
+
+// ============================================================
+// Render Prediction
+// ============================================================
+
+function renderResult(result, payload) {
+  const content = document.getElementById("result-content");
+  const empty = document.getElementById("result-empty");
+  const error = document.getElementById("result-error");
+
+  empty.classList.add("hidden");
+  error.classList.add("hidden");
+  content.classList.remove("hidden");
+  // Remove metadata from the previous prediction.
+  content.querySelectorAll(".result-meta").forEach(el => el.remove());
+
+  const probability = Number(result.probability);
+  const percentage = Number.isFinite(
+    Number(result.probability_percent)
+  )
+    ? Number(result.probability_percent)
+    : probability * 100;
+
+  const risk = String(result.risk || "minimal").toLowerCase();
+
+  const badge = document.getElementById("verdict-badge");
+
+  badge.textContent =
+    `${result.label || "Prediction"} · ${percentage.toFixed(2)}%`;
+
+  badge.className = `verdict risk-${risk}`;
+
+  const meter = document.getElementById("meter-fill");
+
+  meter.style.width = `${Math.max(0, Math.min(100, percentage))}%`;
+
+  const riskColors = {
+    minimal: "#16A34A",
+    low: "#EAB308",
+    medium: "#F97316",
+    high: "#DC2626"
+  };
+
+  meter.style.background = riskColors[risk] || "#64748B";
+
+  document.getElementById("meter-label").textContent =
+    `${percentage.toFixed(2)}% fraud score`;
+  // Display risk interpretation
+  const riskDescription = {
+    minimal: "The model assigns this click a minimal risk score. No strong suspicious pattern was detected.",
+    low: "The model assigns this click a low risk score. Continue normal monitoring.",
+    medium: "The model assigns this click a medium risk score. Further investigation may be appropriate.",
+    high: "The model assigns this click a high risk score. Review this click for potentially suspicious activity."
+  };
+
+  document.getElementById("risk-description").textContent =
+    riskDescription[risk] || "Risk interpretation is unavailable.";
+
+  // Display the submitted attributes, not fabricated explanations.
+  const heading = content.querySelector("h3");
+
+  if (heading) {
+    heading.textContent = "Submitted click details";
   }
 
-  new Chart(canvas, {
+  const list = document.getElementById("factors-list");
+  list.replaceChildren();
 
-    type: "bar",
+  const displayFields = [
+    ["Device", payload.device_type],
+    ["Browser", payload.browser],
+    ["Operating system", payload.operating_system],
+    ["Ad position", payload.ad_position],
+    ["IP reputation", payload.device_ip_reputation],
+    ["Click duration", `${payload.click_duration} seconds`],
+    ["Scroll depth", payload.scroll_depth],
+    ["Mouse movement", payload.mouse_movement],
+    ["Keystrokes", payload.keystrokes_detected],
+    ["Click frequency", payload.click_frequency],
+    ["Time since last click", `${payload.time_since_last_click} seconds`],
+    ["VPN usage", payload.VPN_usage ? "Yes" : "No"],
+    ["Proxy usage", payload.proxy_usage ? "Yes" : "No"]
+  ];
 
-    data: {
+  displayFields.forEach(([name, value]) => {
+    const item = document.createElement("li");
 
-      labels: [
-        "ROC-AUC",
-        "PR-AUC",
-        "Precision",
-        "Recall",
-        "F1"
-      ],
+    const label = document.createElement("span");
+    label.className = "factor-name";
+    label.textContent = name;
 
-      datasets: [
-        {
-          label: "V2 Random Forest",
-          data: [
-            stats.performance.roc_auc * 100,
-            stats.performance.pr_auc * 100,
-            stats.performance.precision * 100,
-            stats.performance.recall * 100,
-            stats.performance.f1 * 100
-          ],
-          backgroundColor: "#161B27"
-        }
-      ]
-    },
+    const fieldValue = document.createElement("span");
+    fieldValue.className = "factor-value";
+    fieldValue.textContent = String(value);
 
-    options: {
+    item.append(label, fieldValue);
+    list.appendChild(item);
+  });
 
-      responsive: true,
+  if (result.warning) {
+    const warning = document.createElement("p");
+    warning.className = "card-note result-meta";
+    warning.textContent = result.warning;
+    list.after(warning);
+  }
 
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          grid: {
-            color: "#EEF1F5"
-          }
-        },
+  if (result.model) {
+    const modelInfo = document.createElement("p");
+    modelInfo.className = "card-note result-meta";
+    modelInfo.textContent = `Model: ${result.model}`;
+    list.after(modelInfo);
+  }
+}
 
-        x: {
-          grid: {
-            display: false
-          }
-        }
+// ============================================================
+// Prediction History
+// ============================================================
+
+async function loadPredictionHistory() {
+  const tbody = document.getElementById(
+    "prediction-history-body"
+  );
+
+  if (!tbody) return;
+
+  try {
+    const response = await fetch(`${API}/api/history/recent`);
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    historyPredictions = data.predictions || [];
+    renderPredictionHistory(historyPredictions);
+
+  } catch (error) {
+    console.warn("Prediction history unavailable:", error);
+  }
+}
+
+let riskDistributionChart = null;
+let predictionDistributionChart = null;
+
+
+
+function createCenterTextPlugin(total, label) {
+  return {
+    id: `centerText-${label.replace(/\s/g, "")}`,
+
+    afterDraw(chart) {
+      const { ctx, chartArea } = chart;
+
+      if (!chartArea) return;
+
+      const centerX = (chartArea.left + chartArea.right) / 2;
+      const centerY = (chartArea.top + chartArea.bottom) / 2;
+
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.font = "bold 24px sans-serif";
+      ctx.fillStyle = "#111827";
+      ctx.fillText(total.toLocaleString(), centerX, centerY - 9);
+
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#64748b";
+      ctx.fillText(label, centerX, centerY + 14);
+
+      ctx.restore();
+    }
+  };
+}
+
+function updateLiveAnalytics(stats) {
+  const total = Number(stats.total_predictions) || 0;
+  const suspicious = Number(stats.suspicious_clicks) || 0;
+  const legitimate = Number(stats.legitimate_clicks) || 0;
+
+  document.getElementById("live-total").textContent = total;
+  document.getElementById("live-suspicious").textContent = suspicious;
+  document.getElementById("live-legitimate").textContent = legitimate;
+
+  const riskCounts = stats.risk_distribution || {};
+
+  if (riskDistributionChart) {
+    riskDistributionChart.destroy();
+  }
+
+  if (predictionDistributionChart) {
+    predictionDistributionChart.destroy();
+  }
+
+  const riskCanvas = document.getElementById("riskDistributionChart");
+  const predictionCanvas = document.getElementById("predictionDistributionChart");
+
+  // Prepare risk data and remove categories with zero predictions.
+  const riskCategories = [
+    { label: "Minimal", value: Number(riskCounts.minimal) || 0, color: "#16a34a" },
+    { label: "Low", value: Number(riskCounts.low) || 0, color: "#eab308" },
+    { label: "Medium", value: Number(riskCounts.medium) || 0, color: "#f97316" },
+    { label: "High", value: Number(riskCounts.high) || 0, color: "#dc2626" }
+  ].filter(item => item.value > 0);
+
+  // Prepare prediction data and remove categories with zero predictions.
+  const predictionCategories = [
+    { label: "Potentially Suspicious", value: suspicious, color: "#dc2626" },
+    { label: "Likely Legitimate", value: legitimate, color: "#16a34a" }
+  ].filter(item => item.value > 0);
+
+  function createDoughnut(canvas, categories, centerLabel) {
+    if (!canvas || typeof Chart === "undefined") return null;
+
+    return new Chart(canvas, {
+      type: "doughnut",
+
+      data: {
+        labels: categories.map(item => item.label),
+
+        datasets: [{
+          data: categories.map(item => item.value),
+          backgroundColor: categories.map(item => item.color),
+          borderWidth: 0,
+          hoverOffset: 6
+        }]
       },
 
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: {
-            boxWidth: 10,
-            font: {
-              family: "Inter"
+      plugins: [
+        createCenterTextPlugin(
+          categories.reduce((sum, item) => sum + item.value, 0),
+          centerLabel
+        )
+      ],
+
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "68%",
+
+        plugins: {
+          legend: {
+            position: "bottom",
+
+            labels: {
+              usePointStyle: true,
+              padding: 16,
+
+              generateLabels(chart) {
+                const dataset = chart.data.datasets[0];
+
+                const sum = dataset.data.reduce(
+                  (acc, value) => acc + Number(value || 0), 0
+                );
+
+                return chart.data.labels.map((label, index) => {
+                  const value = Number(dataset.data[index]) || 0;
+                  const percentage = sum ? (value / sum) * 100 : 0;
+
+                  return {
+                    text: `${label}: ${value} (${percentage.toFixed(1)}%)`,
+                    fillStyle: dataset.backgroundColor[index],
+                    strokeStyle: dataset.backgroundColor[index],
+                    lineWidth: 0,
+                    hidden: false,
+                    index
+                  };
+                });
+              }
+            }
+          },
+
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const value = Number(context.parsed) || 0;
+                const percentage = total
+                  ? (value / total) * 100
+                  : 0;
+
+                return `${context.label}: ${value} (${percentage.toFixed(1)}%)`;
+              }
             }
           }
         }
       }
-    }
-  });
-}
-
-
-// ============================================================
-// Feature Chart
-// ============================================================
-
-function renderFeatureChart(features) {
-
-  const canvas =
-    document.getElementById("importanceChart");
-
-  if (!canvas) {
-    return;
-  }
-
-  const groups = groupModelFeatures(features);
-
-  new Chart(canvas, {
-
-    type: "bar",
-
-    data: {
-
-      labels: groups.map(group => group.label),
-
-      datasets: [
-        {
-          label: "Number of features",
-          data: groups.map(group => group.features.length),
-          backgroundColor: "#161B27"
-        }
-      ]
-    },
-
-    options: {
-
-      indexAxis: "y",
-
-      responsive: true,
-
-      scales: {
-
-        x: {
-          beginAtZero: true,
-          ticks: {
-            stepSize: 1
-          },
-          grid: {
-            color: "#EEF1F5"
-          }
-        },
-
-        y: {
-          grid: {
-            display: false
-          }
-        }
-
-      },
-
-      plugins: {
-
-        legend: {
-          display: false
-        }
-
-      }
-
-    }
-
-  });
-}
-
-
-function renderFeatureGroups(features) {
-  const container = document.getElementById("feature-group-grid");
-
-  if (!container) return;
-
-  container.replaceChildren();
-
-  groupModelFeatures(features).forEach(group => {
-    const card = document.createElement("div");
-    card.className = "cm-cell";
-
-    const count = document.createElement("span");
-    count.className = "cm-count";
-    count.textContent = String(group.features.length);
-
-    const label = document.createElement("span");
-    label.className = "cm-label";
-    label.textContent = group.label;
-
-    const list = document.createElement("ul");
-    list.className = "feature-group-features";
-
-    group.features.forEach(feature => {
-      const item = document.createElement("li");
-      item.textContent = feature;
-      list.appendChild(item);
     });
-
-    card.append(count, label, list);
-    container.appendChild(card);
-  });
-}
-
-
-// ============================================================
-// Results Table
-// ============================================================
-
-function renderResultsTable(stats) {
-
-  const tbody =
-    document.querySelector("#results-table tbody");
-
-  if (!tbody) {
-    return;
   }
 
+  riskDistributionChart = createDoughnut(
+    riskCanvas,
+    riskCategories,
+    "Risk levels"
+  );
+
+  predictionDistributionChart = createDoughnut(
+    predictionCanvas,
+    predictionCategories,
+    "Predictions"
+  );
+}
+
+function renderPredictionHistory(predictions) {
+
+  const searchInput = document.getElementById("history-search");
+  const statusFilter = document.getElementById("history-status-filter");
+  const riskFilter = document.getElementById("history-risk-filter");
+
+  const searchTerm = searchInput?.value.toLowerCase().trim() || "";
+  const selectedStatus = statusFilter?.value || "all";
+  const selectedRisk = riskFilter?.value || "all";
+
+  predictions = predictions.filter(prediction => {
+    const searchableText = [
+      prediction.device_type,
+      prediction.browser,
+      prediction.operating_system
+    ].join(" ").toLowerCase();
+
+    const matchesSearch = searchableText.includes(searchTerm);
+
+    const matchesStatus =
+      selectedStatus === "all" ||
+      prediction.label === selectedStatus;
+
+    const matchesRisk =
+      selectedRisk === "all" ||
+      String(prediction.risk).toLowerCase() === selectedRisk;
+
+    return matchesSearch && matchesStatus && matchesRisk;
+  });
+
+  const tbody = document.getElementById(
+    "prediction-history-body"
+  );
+
+  if (!tbody) return;
 
   tbody.replaceChildren();
 
-  (stats.comparison || []).forEach(result => {
+  if (!predictions.length) {
     const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 6;
+    cell.textContent = "No predictions yet.";
+
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  [...predictions].reverse().forEach(prediction => {
+    const row = document.createElement("tr");
+
+
     const values = [
-      result.version,
-      result.model,
-      `${(result.precision * 100).toFixed(2)}%`,
-      `${(result.recall * 100).toFixed(2)}%`,
-      `${(result.f1 * 100).toFixed(2)}%`,
-      result.roc_auc.toFixed(4),
-      result.pr_auc.toFixed(4)
+      prediction.click_time
+        ? new Date(prediction.click_time).toLocaleTimeString()
+        : "—",
+
+      prediction.device_type ?? "—",
+      prediction.browser ?? "—",
+      prediction.operating_system ?? "—",
+
+      `${(Number(prediction.probability) * 100).toFixed(2)}%`
     ];
 
     values.forEach(value => {
@@ -419,471 +550,183 @@ function renderResultsTable(stats) {
       row.appendChild(cell);
     });
 
-    if (result.deployed) {
-      row.classList.add("deployed-model-row");
-    }
+    // Result column: prediction label + risk badge
+    const resultCell = document.createElement("td");
+
+    const label = document.createElement("span");
+    label.textContent = prediction.label ?? "—";
+
+    const risk = String(prediction.risk || "minimal").toLowerCase();
+
+    const riskBadge = document.createElement("span");
+    riskBadge.className = `history-risk risk-${risk}`;
+    riskBadge.textContent = risk.charAt(0).toUpperCase() + risk.slice(1);
+
+    resultCell.append(label, document.createTextNode(" "), riskBadge);
+    row.appendChild(resultCell);
 
     tbody.appendChild(row);
   });
 }
 
+let historyPredictions = [];
 
-// ============================================================
-// Live Predictor
-// ============================================================
+function setupHistoryFilters() {
+  const searchInput = document.getElementById("history-search");
+  const statusFilter = document.getElementById("history-status-filter");
+  const riskFilter = document.getElementById("history-risk-filter");
 
-const predictForm =
-  document.getElementById("predict-form");
+  if (!searchInput || !statusFilter || !riskFilter) return;
 
+  const applyFilters = () => {
+    renderPredictionHistory(historyPredictions);
+  };
 
-if (predictForm) {
-
-  predictForm.addEventListener(
-    "submit",
-    async (e) => {
-
-      e.preventDefault();
-
-      const form = e.target;
-
-      const data =
-        Object.fromEntries(
-          new FormData(form).entries()
-        );
-
-
-      const payload = {
-
-        ip: Number(data.ip),
-
-        app: Number(data.app),
-
-        device: Number(data.device),
-
-        os: Number(data.os),
-
-        channel: Number(data.channel),
-
-        click_time: data.click_time
-      };
-
-
-      document
-        .getElementById("result-empty")
-        .classList.add("hidden");
-
-      document
-        .getElementById("result-error")
-        .classList.add("hidden");
-
-
-      try {
-
-        const res = await fetch(
-          `${API}/api/predict`,
-          {
-            method: "POST",
-
-            headers: {
-              "Content-Type": "application/json"
-            },
-
-            body: JSON.stringify(payload)
-          }
-        );
-
-
-        if (!res.ok) {
-
-          const error =
-            await res.json();
-
-          throw new Error(
-            error.detail ||
-            "Prediction failed"
-          );
-        }
-
-
-        const result =
-          await res.json();
-
-
-        renderResult(result);
-
-
-      } catch (err) {
-
-        document
-          .getElementById("result-content")
-          .classList.add("hidden");
-
-        const errEl =
-          document.getElementById("result-error");
-
-        errEl.textContent =
-          err.message;
-
-        errEl.classList.remove("hidden");
-      }
-    }
-  );
+  searchInput.addEventListener("input", applyFilters);
+  statusFilter.addEventListener("change", applyFilters);
+  riskFilter.addEventListener("change", applyFilters);
 }
 
 
-// ============================================================
-// Render Prediction
-// ============================================================
-
-function renderResult(result) {
-
-  const resultContent =
-    document.getElementById("result-content");
-
-  const resultEmpty =
-    document.getElementById("result-empty");
-
-  const resultError =
-    document.getElementById("result-error");
-
-  resultEmpty.classList.add("hidden");
-  resultError.classList.add("hidden");
-  resultContent.classList.remove("hidden");
-
-
-  // ----------------------------------------------------------
-  // Verdict
-  // ----------------------------------------------------------
-
-  const badge =
-    document.getElementById("verdict-badge");
-
-  const probability =
-    Number(result.probability) || 0;
-
-  const risk =
-    String(result.risk || "minimal");
-
-  const label =
-    String(result.label || "Prediction");
-
-
-  badge.textContent =
-    `${label} · ${(probability * 100).toFixed(1)}%`;
-
-  badge.className =
-    `verdict risk-${risk}`;
-
-
-  // ----------------------------------------------------------
-  // Probability meter
-  // ----------------------------------------------------------
-
-  const pct =
-    Math.round(probability * 100);
-
-  const meter =
-    document.getElementById("meter-fill");
-
-  meter.style.width =
-    `${pct}%`;
-
-  meter.style.background =
-    risk === "minimal"
-      ? "#0F7B6C"
-      : risk === "low"
-        ? "#C98A1F"
-        : "#B3261E";
-
-
-  document
-    .getElementById("meter-label")
-    .textContent =
-      `${pct}% attribution probability`;
-
-
-  // ----------------------------------------------------------
-  // Behavioral signals
-  // ----------------------------------------------------------
-
-  const list =
-    document.getElementById("factors-list");
-
-  const signals =
-    Array.isArray(result.behavioral_signals)
-      ? result.behavioral_signals
-      : [];
-
-
-  if (signals.length === 0) {
-
-    list.innerHTML = `
-      <li>
-        <span class="factor-name">
-          No behavioral history available
-        </span>
-        <span class="factor-value">
-          —
-        </span>
-      </li>
-    `;
-
-    return;
-  }
-
-
-  list.innerHTML =
-    signals.map(signal => {
-
-      const description =
-        String(
-          signal.description ||
-          signal.feature ||
-          "Behavioral signal"
-        );
-
-      const value =
-        Number(signal.value);
-
-
-      return `
-        <li>
-          <span class="factor-name">
-            ${description}
-          </span>
-
-          <span class="factor-value">
-            ${
-              Number.isFinite(value)
-                ? formatSignalValue(
-                    signal.feature || "",
-                    value
-                  )
-                : "—"
-            }
-          </span>
-        </li>
-      `;
-
-    }).join("");
-}
 
 
 // ============================================================
-// Format behavioral values
+// Reset History
 // ============================================================
 
-function formatSignalValue(
-  feature,
-  value
-) {
-
-  if (
-    feature.startsWith(
-      "seconds_since"
-    )
-  ) {
-
-    if (value < 0) {
-      return "No previous click";
-    }
-
-    if (value < 60) {
-      return `${value.toFixed(0)} sec`;
-    }
-
-    if (value < 3600) {
-      return `${(value / 60).toFixed(1)} min`;
-    }
-
-    return `${(value / 3600).toFixed(1)} hr`;
-  }
-
-
-  return value.toFixed(0);
-}
-
-
-// ============================================================
-// Initial load
-// ============================================================
-
-loadDashboard();
-
-// ============================================================
-// Prediction History
-// ============================================================
-
-async function loadPredictionHistory() {
-
-  try {
-
-    const res =
-      await fetch(`${API}/api/history/recent`);
-
-    if (!res.ok) {
-      return;
-    }
-
-    const data =
-      await res.json();
-
-    renderPredictionHistory(
-      data.predictions || []
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Could not load prediction history:",
-      error
-    );
-  }
-}
-
-
-function renderPredictionHistory(
-  predictions
-) {
-
-  const tbody =
-    document.getElementById(
-      "prediction-history-body"
-    );
-
-  if (!tbody) {
-    return;
-  }
-
-
-  if (predictions.length === 0) {
-
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6">
-          No predictions yet.
-        </td>
-      </tr>
-    `;
-
-    return;
-  }
-
-
-  // Most recent first
-  const recent =
-    [...predictions].reverse();
-
-
-  tbody.innerHTML =
-    recent.map(prediction => {
-
-      const probability =
-        Number(prediction.probability) || 0;
-
-      const pct =
-        (probability * 100).toFixed(1);
-
-      const time =
-        new Date(
-          prediction.click_time
-        ).toLocaleTimeString();
-
-
-      return `
-        <tr>
-
-          <td>${time}</td>
-
-          <td>${prediction.ip}</td>
-
-          <td>${prediction.app}</td>
-
-          <td>${prediction.device}</td>
-
-          <td>${pct}%</td>
-
-          <td>
-            <span class="history-risk risk-${prediction.risk}">
-              ${prediction.label}
-            </span>
-          </td>
-
-        </tr>
-      `;
-
-    }).join("");
-}
-
-
-// Load history when page opens
-loadPredictionHistory();
-
-
-// Refresh history after every prediction
-const originalPredictForm =
-  document.getElementById("predict-form");
-
-if (originalPredictForm) {
-
-  originalPredictForm.addEventListener(
-    "submit",
-    () => {
-
-      // Give the prediction request time to finish.
-      setTimeout(
-        loadPredictionHistory,
-        300
-      );
-
-    }
-  );
-}
-
-
-// Reset history
-const resetButton =
-  document.getElementById("reset-history");
+const resetButton = document.getElementById("reset-history");
 
 if (resetButton) {
+  resetButton.addEventListener("click", async () => {
+    try {
+      const response = await fetch(
+        `${API}/api/history/reset`,
+        { method: "POST" }
+      );
 
-  resetButton.addEventListener(
-    "click",
-    async () => {
-
-      try {
-
-        const res =
-          await fetch(
-            `${API}/api/history/reset`,
-            {
-              method: "POST"
-            }
-          );
-
-        if (!res.ok) {
-          throw new Error(
-            "Could not reset history"
-          );
-        }
-
-        await loadPredictionHistory();
-
-        // Clear the current result display.
-        document
-          .getElementById("result-content")
-          ?.classList.add("hidden");
-
-        document
-          .getElementById("result-empty")
-          ?.classList.remove("hidden");
-
-      } catch (error) {
-
-        console.error(error);
-
+      if (!response.ok) {
+        throw new Error("History reset endpoint unavailable.");
       }
 
+      await loadDashboard();
+      await loadPredictionHistory();
+
+      document.getElementById("result-content")
+        ?.classList.add("hidden");
+
+      document.getElementById("result-empty")
+        ?.classList.remove("hidden");
+
+    } catch (error) {
+      console.error("Reset error:", error);
+      alert(error.message);
     }
-  );
+  });
+}
+
+// ============================================================
+// Initial Load
+// ============================================================
+
+// Initial dashboard load
+setupHistoryFilters();
+loadDashboard();
+loadPredictionHistory();
+
+// Automatically refresh dashboard every 30 seconds
+setInterval(() => {
+  loadDashboard();
+  loadPredictionHistory();
+}, 30000);
+
+
+const c2idtlForm = document.getElementById("c2idtl-form");
+
+if (c2idtlForm) {
+  c2idtlForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const errorElement = document.getElementById("c2idtl-error");
+    const resultElement = document.getElementById("c2idtl-result");
+    const button = c2idtlForm.querySelector('button[type="submit"]');
+
+    errorElement.classList.add("hidden");
+    resultElement.classList.add("hidden");
+    button.disabled = true;
+    button.textContent = "Running C2IDTL...";
+
+    try {
+      const formData = Object.fromEntries(
+        new FormData(c2idtlForm).entries()
+      );
+
+      const payload = {
+        ip: Number(formData.ip),
+        app: Number(formData.app),
+        device: Number(formData.device),
+        os: Number(formData.os),
+        channel: Number(formData.channel),
+        click_time: new Date(formData.click_time).toISOString()
+      };
+      console.log("C2IDTL payload:", payload);
+
+      const response = await fetch(`${API}/api/c2idtl/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.detail || "C2IDTL prediction failed.");
+      }
+
+
+      const attribution = result.predicted_class === 1
+        ? "Attributed (class 1)"
+        : "Not attributed (class 0)";
+
+      const score = Number(result.probability_percent);
+
+      resultElement.innerHTML = `
+      <div class="c2idtl-result-card">
+        <p class="c2idtl-result-eyebrow">C2IDTL · ResNet50</p>
+        <h3>Attribution prediction</h3>
+        <div class="c2idtl-score">
+         ${Number.isFinite(score) ? score.toFixed(2) : "N/A"}%
+        </div>
+
+        <div class="c2idtl-score-track">
+          <div class="c2idtl-score-fill"
+           style="width: ${Number.isFinite(score)
+            ? Math.max(0, Math.min(100, score))
+            : 0}%">
+          </div>
+        </div>
+
+          <p class="c2idtl-prediction">
+            <strong>Predicted class:</strong> ${attribution}
+          </p>
+
+          <p class="c2idtl-method">
+            Click features → feature-importance image → ResNet50
+          </p>
+
+          <p class="c2idtl-warning">
+            ${result.warning}
+          </p>
+      </div>
+`;
+
+      resultElement.classList.remove("hidden");
+
+    } finally {
+      button.disabled = false;
+      button.textContent = "Run C2IDTL Prediction";
+    }
+  });
 }

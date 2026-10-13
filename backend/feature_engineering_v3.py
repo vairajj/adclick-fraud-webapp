@@ -66,36 +66,34 @@ print("  - day")
 print("  - day_of_week")
 
 
+
 # ============================================================
-# 4. HISTORICAL COUNTS
+# 4. HISTORICAL COUNTS — STRICTLY EARLIER TIMESTAMPS
 # ============================================================
 
 print("\n[4/9] Creating historical counts...")
 
-df["ip_prev_clicks"] = (
-    df.groupby("ip")
-      .cumcount()
-)
+def add_previous_timestamp_counts(dataframe, group_columns, output_column):
+    """Count group events with timestamps strictly before each row."""
+    counts = pd.Series(0, index=dataframe.index, dtype="int64")
 
-df["app_prev_clicks"] = (
-    df.groupby("app")
-      .cumcount()
-)
+    for _, group in dataframe.groupby(group_columns, sort=False):
+        group = group.sort_values("click_time", kind="stable")
+        timestamp_counts = group.groupby("click_time", sort=False).size()
+        cumulative = timestamp_counts.cumsum().shift(1, fill_value=0)
+        counts.loc[group.index] = (
+            group["click_time"].map(cumulative).to_numpy()
+        )
 
-df["device_prev_clicks"] = (
-    df.groupby("device")
-      .cumcount()
-)
+    dataframe[output_column] = counts
 
-df["os_prev_clicks"] = (
-    df.groupby("os")
-      .cumcount()
-)
 
-df["channel_prev_clicks"] = (
-    df.groupby("channel")
-      .cumcount()
-)
+add_previous_timestamp_counts(df, ["ip"], "ip_prev_clicks")
+add_previous_timestamp_counts(df, ["app"], "app_prev_clicks")
+add_previous_timestamp_counts(df, ["device"], "device_prev_clicks")
+add_previous_timestamp_counts(df, ["os"], "os_prev_clicks")
+add_previous_timestamp_counts(df, ["channel"], "channel_prev_clicks")
+
 
 
 # ============================================================
@@ -104,25 +102,11 @@ df["channel_prev_clicks"] = (
 
 print("\n[5/9] Creating interaction history...")
 
-df["ip_app_prev_clicks"] = (
-    df.groupby(["ip", "app"])
-      .cumcount()
-)
+add_previous_timestamp_counts(df, ["ip", "app"], "ip_app_prev_clicks")
+add_previous_timestamp_counts(df, ["ip", "device"], "ip_device_prev_clicks")
+add_previous_timestamp_counts(df, ["ip", "os"], "ip_os_prev_clicks")
+add_previous_timestamp_counts(df, ["ip", "channel"], "ip_channel_prev_clicks")
 
-df["ip_device_prev_clicks"] = (
-    df.groupby(["ip", "device"])
-      .cumcount()
-)
-
-df["ip_os_prev_clicks"] = (
-    df.groupby(["ip", "os"])
-      .cumcount()
-)
-
-df["ip_channel_prev_clicks"] = (
-    df.groupby(["ip", "channel"])
-      .cumcount()
-)
 
 
 # ============================================================
@@ -131,6 +115,38 @@ df["ip_channel_prev_clicks"] = (
 
 print("\n[6/9] Creating previous-click features...")
 
+
+def add_previous_click_features(dataframe, group_columns, prefix):
+    """Use only timestamps strictly earlier than the current click."""
+    previous_time = pd.Series(
+        pd.NaT, index=dataframe.index, dtype="datetime64[ns]"
+    )
+
+    for _, group in dataframe.groupby(group_columns, sort=False):
+        group = group.sort_values("click_time", kind="stable")
+
+        # One row per distinct timestamp, so tied clicks share
+        # the same strictly previous timestamp.
+        unique_times = pd.Index(group["click_time"].drop_duplicates())
+        prior_times = pd.Series(unique_times).shift(1)
+        previous_by_time = dict(zip(unique_times, prior_times))
+
+        previous_time.loc[group.index] = (
+            group["click_time"].map(previous_by_time).to_numpy()
+        )
+
+    dataframe[f"prev_{prefix}_click_time"] = previous_time
+    dataframe[f"seconds_since_prev_{prefix}_click"] = (
+        dataframe["click_time"] - previous_time
+    ).dt.total_seconds()
+    dataframe[f"has_previous_{prefix}_click"] = (
+        previous_time.notna().astype("int8")
+    )
+
+
+add_previous_click_features(df, ["ip"], "ip")
+add_previous_click_features(df, ["ip", "app"], "ip_app")
+add_previous_click_features(df, ["ip", "device"], "ip_device")
 
 # ------------------------------------------------------------
 # Previous IP click
@@ -226,40 +242,49 @@ print("\n[7/9] Creating recent activity features...")
 df["_row_order"] = np.arange(len(df))
 
 
-def previous_window_count(
-    timestamps,
-    window_seconds
-):
+
+def previous_window_count(timestamps, window_seconds):
     """
-    Count previous timestamps inside a fixed time window.
+    Count events strictly before the current timestamp,
+    within the specified time window.
 
-    The current timestamp is excluded.
+    Events sharing the current timestamp are excluded.
     """
-
-    values = timestamps.astype("int64").to_numpy()
-
+    values = (
+        timestamps
+        .astype("datetime64[ns]")
+        .astype("int64")
+     .to_numpy()
+    )
     result = np.zeros(len(values), dtype=np.int32)
 
     left = 0
+    right = 0
+    n = len(values)
+    window_ns = window_seconds * 1_000_000_000
 
-    for right in range(len(values)):
-
+    while right < n:
         current_time = values[right]
 
-        window_start = (
-            current_time
-            - window_seconds * 1_000_000_000
-        )
+        # Find all rows with this exact timestamp.
+        end = right + 1
+        while end < n and values[end] == current_time:
+            end += 1
 
-        while (
-            left < right
-            and values[left] <= window_start
-        ):
+        # Keep only events strictly newer than the window start.
+        window_start = current_time - window_ns
+        while left < right and values[left] <= window_start:
             left += 1
 
-        result[right] = right - left
+        # Every tied row gets the same count. None of the
+        # current-timestamp rows are counted as previous events.
+        count = right - left
+        result[right:end] = count
+
+        right = end
 
     return result
+
 
 
 def add_window_count(

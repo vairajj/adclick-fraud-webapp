@@ -1,365 +1,368 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ad Click Fraud Detection</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,5
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ad Click Fraud Detection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,5
 00;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark">AF</span>
-    <div>
-      <h1>Ad Click Attribution &amp; Suspicious Click Detection</h1>
-      <p class="subtitle">Behavioral ad-click attribution analysis using historical click patterns</p>
-    </div>
-  </div>
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
-    <button class="tab" data-tab="predictor" role="tab" aria-selected="false">Live Check</button>
-  </nav>
-</header>
-
-<main>
-
-<!-- ============ DASHBOARD ============ -->
-<section id="dashboard" class="panel-view active">
-
-  <div id="dashboard-loading" class="state-msg">
-    Loading V2 model information...
-  </div>
-
-  <div id="dashboard-error" class="state-msg error hidden">
-    Unable to load model information. Make sure the FastAPI backend is running.
-  </div>
-
-  <div id="dashboard-content" class="hidden">
-
-    <!-- ==================== OVERVIEW ==================== -->
-
-    <div class="hero-row">
-
-      <div class="hero-card">
-        <span class="hero-label">Deployed model</span>
-        <span class="hero-value" id="best-model-name">Random Forest</span>
-        <span class="hero-sub" id="best-model-sub">
-          V2 behavioral feature pipeline
-        </span>
-      </div>
-
-      <div class="stat-card">
-        <span class="stat-label">Dataset size</span>
-        <span class="stat-value" id="stat-rows">99,999</span>
-      </div>
-
-      <div class="stat-card">
-        <span class="stat-label">Attribution rate</span>
-        <span class="stat-value" id="stat-fraud-rate">0.227%</span>
-      </div>
-
-      <div class="stat-card">
-        <span class="stat-label">V2 features</span>
-        <span class="stat-value">20</span>
-      </div>
-
-    </div>
-
-
-    <!-- ==================== MODEL PERFORMANCE ==================== -->
-
-    <div class="grid-2">
-
-      <div class="card">
-
-        <h2>V2 model performance</h2>
-
-        <p class="card-note">
-          Performance on the chronological hold-out test set.
-        </p>
-
-        <canvas id="modelChart" height="260"></canvas>
-
-      </div>
-
-
-      <div class="card">
-
-        <h2>V2 feature groups</h2>
-
-        <p class="card-note">
-          Feature categories used by the deployed behavioral model.
-        </p>
-
-        <canvas id="importanceChart" height="260"></canvas>
-
-      </div>
-
-    </div>
-
-
-    <!-- ==================== PERFORMANCE SUMMARY ==================== -->
-
-    <div class="card">
-
-      <h2>Test-set performance</h2>
-
-      <p class="card-note">
-        The V2 model was evaluated using a chronological train/test split.
-        The test set contains 28,561 clicks and 59 attributed clicks.
-      </p>
-
-      <div class="confusion-grid performance-grid">
-
-  <div class="cm-cell cm-correct">
-    <span class="cm-count">0.9776</span>
-    <span class="cm-label">ROC-AUC</span>
-  </div>
-
-  <div class="cm-cell cm-correct">
-    <span class="cm-count">0.3008</span>
-    <span class="cm-label">PR-AUC</span>
-  </div>
-
-  <div class="cm-cell cm-correct">
-    <span class="cm-count">21.29%</span>
-    <span class="cm-label">Precision</span>
-  </div>
-
-  <div class="cm-cell cm-correct">
-    <span class="cm-count">72.88%</span>
-    <span class="cm-label">Recall</span>
-  </div>
-
-  <div class="cm-cell cm-correct">
-    <span class="cm-count">32.95%</span>
-    <span class="cm-label">F1 Score</span>
-        </div>
-
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">AF</span>
+      <div>
+        <h1>Ad Click Fraud Detection</h1>
+        <p class="subtitle">Behavioural analysis and machine learning-based
+          click fraud detection</p>
       </div>
     </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="dashboard" role="tab" aria-selected="true">Dashboard</button>
+      <button class="tab" data-tab="predictor" role="tab" aria-selected="false">Live Check</button>
+    </nav>
+  </header>
 
+  <main>
 
-    <!-- ==================== RESULTS TABLE ==================== -->
+    <!-- ============ DASHBOARD ============ -->
+    <section id="dashboard" class="panel-view active">
 
-    <div class="card">
+      <div id="dashboard-loading" class="state-msg">
+        Loading model information...
+      </div>
 
-      <h2>Model comparison</h2>
+      <div id="dashboard-error" class="state-msg error hidden">
+        Unable to load model information. Make sure the FastAPI backend is
+        running.
+      </div>
 
-      <p class="card-note">
-        Metrics are loaded from the saved experiment result CSVs. V1 uses
-        full-dataset frequency features that include future events, so treat
-        its scores as exploratory rather than a leakage-safe comparison.
-      </p>
+      <div id="dashboard-content" class="hidden">
 
-      <table id="results-table" class="data-table">
+        <!-- ==================== OVERVIEW ==================== -->
 
-        <thead>
-          <tr>
-            <th>Version</th>
-            <th>Model</th>
-            <th>Precision</th>
-            <th>Recall</th>
-            <th>F1</th>
-            <th>ROC-AUC</th>
-            <th>PR-AUC</th>
-          </tr>
-        </thead>
+        <div class="hero-row">
 
-        <tbody></tbody>
-
-      </table>
-
-    </div>
-
-
-    <!-- ==================== METHODOLOGY ==================== -->
-
-    <div class="card">
-
-      <h2>Behavioral feature pipeline</h2>
-
-      <p class="card-note">
-        Unlike the original prototype, V2 generates historical behavioral
-        features from clicks observed before the current event. The five groups
-        below account for all 20 features used by the deployed model.
-      </p>
-
-      <div id="feature-group-grid" class="feature-group-grid" aria-label="All V2 model features by group"></div>
-
-      <p class="card-note">
-        Historical features are calculated before the current click is
-        added to the session history, preventing the current event from
-        influencing its own behavioral features.
-      </p>
-
-    </div>
-
-  </div>
-
-</section>
-
-  <!-- ============ LIVE PREDICTOR ============ -->
-  <section id="predictor" class="panel-view">
-    <div class="predictor-grid">
-
-      <form id="predict-form" class="card form-card">
-  <h2>Check a click</h2>
-
-  <p class="card-note">
-    Enter click and device details to analyze the click using
-    historical behavioral features.
-  </p>
-
-  <label>
-    IP address ID
-    <input
-      type="number"
-      name="ip"
-      min="0"
-      value="5348"
-      required
-    >
-  </label>
-
-  <label>
-    App ID
-    <input
-      type="number"
-      name="app"
-      min="0"
-      value="19"
-      required
-    >
-  </label>
-
-  <label>
-    Device ID
-    <input
-      type="number"
-      name="device"
-      min="0"
-      value="1"
-      required
-    >
-  </label>
-
-  <label>
-    Operating System ID
-    <input
-      type="number"
-      name="os"
-      min="0"
-      value="13"
-      required
-    >
-  </label>
-
-  <label>
-    Channel ID
-    <input
-      type="number"
-      name="channel"
-      min="0"
-      value="213"
-      required
-    >
-  </label>
-
-  <label>
-    Click time
-    <input
-      type="datetime-local"
-      name="click_time"
-      value="2017-11-09T10:00"
-      required
-    >
-  </label>
-
-  <button type="submit" class="btn-primary">
-    Analyze this click
-  </button>
-</form>
-
-      <div class="card result-card">
-        <h2>Result</h2>
-        <div id="result-empty" class="state-msg">Submit the form to screen a click.</div>
-        <div id="result-content" class="hidden">
-          <div class="verdict" id="verdict-badge">—</div>
-          <div class="meter-wrap">
-            <div class="meter-track"><div class="meter-fill" id="meter-fill"></div></div>
-            <span class="meter-label" id="meter-label">0%</span>
+          <div class="hero-card">
+            <span class="hero-label">Deployed model</span>
+            <span class="hero-value" id="best-model-name">LightGBM</span>
+            <span class="hero-sub" id="best-model-sub">
+              Experimental behavioural fraud detection model
+            </span>
           </div>
-          <h3>Behavioral signals</h3>
-          <ul id="factors-list" class="factors-list"></ul>
+
+          <div class="stat-card">
+            <span class="stat-label">Total predictions</span>
+            <span class="stat-value" id="stat-rows">0</span>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-label">Suspicious prediction rate</span>
+            <span class="stat-value" id="stat-fraud-rate">0.00%</span>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-label">Model features</span>
+            <span class="stat-value" id="model-feature-count">16</span>
+          </div>
+
         </div>
-        <div id="result-error" class="state-msg error hidden"></div>
+
+        <!-- ==================== LIVE PREDICTION ANALYTICS ==================== -->
+
+        <div class="card live-analytics">
+
+          <h2>Live Prediction Analytics</h2>
+
+          <p class="card-note">
+            Statistics based on predictions generated during the current
+            session.
+            These are model predictions, not verified fraud outcomes.
+          </p>
+          <p class="card-note" id="model-warning"></p>
+
+          <div class="hero-row analytics-stats">
+
+            <div class="stat-card">
+              <span class="stat-label">Total Predictions</span>
+              <span class="stat-value" id="live-total">0</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-label">Potentially Suspicious</span>
+              <span class="stat-value" id="live-suspicious">0</span>
+            </div>
+
+            <div class="stat-card">
+              <span class="stat-label">Likely Legitimate</span>
+              <span class="stat-value" id="live-legitimate">0</span>
+            </div>
+
+          </div>
+
+          <div class="grid-2 analytics-charts">
+
+            <div>
+              <h3>Risk Distribution</h3>
+              <canvas id="riskDistributionChart" height="220"></canvas>
+            </div>
+
+            <div>
+              <h3>Prediction Distribution</h3>
+              <canvas id="predictionDistributionChart" height="220"></canvas>
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
-    </div>
-    <div class="card prediction-history-card">
+    </section>
 
-  <div class="history-header">
-    <div>
-      <h2>Recent prediction history</h2>
-      <p class="card-note">
-        Predictions generated during the current backend session.
-      </p>
-    </div>
+    <!-- ============ LIVE PREDICTOR ============ -->
+    <section id="predictor" class="panel-view">
+      <div class="predictor-grid">
 
-    <button
-      type="button"
-      id="reset-history"
-      class="btn-secondary"
-    >
-      Reset session
-    </button>
-  </div>
+        <form id="predict-form" class="card form-card">
+          <h2>Check a click</h2>
 
-  <div class="history-table-wrap">
+          <p class="card-note">
+            Enter behavioural and device details to analyze a click.
+          </p>
 
-    <table
-      id="prediction-history-table"
-      class="data-table"
-    >
+          <h3>Device information</h3>
 
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>IP</th>
-          <th>App</th>
-          <th>Device</th>
-          <th>Probability</th>
-          <th>Result</th>
-        </tr>
-      </thead>
+          <label>Device type
+            <select name="device_type" required>
+              <option value="Desktop">Desktop</option>
+              <option value="Mobile">Mobile</option>
+              <option value="Tablet">Tablet</option>
+            </select>
+          </label>
 
-      <tbody id="prediction-history-body">
-        <tr>
-          <td colspan="6">
-            No predictions yet.
-          </td>
-        </tr>
-      </tbody>
+          <label>Browser
+            <select name="browser" required>
+              <option value="Chrome">Chrome</option>
+              <option value="Edge">Edge</option>
+              <option value="Firefox">Firefox</option>
+              <option value="Opera">Opera</option>
+              <option value="Safari">Safari</option>
+            </select>
+          </label>
 
-    </table>
+          <label>Operating system
+            <select name="operating_system" required>
+              <option value="Windows">Windows</option>
+              <option value="Android">Android</option>
+              <option value="Linux">Linux</option>
+              <option value="iOS">iOS</option>
+              <option value="macOS">macOS</option>
+            </select>
+          </label>
 
-  </div>
+          <label>Ad position
+            <select name="ad_position" required>
+              <option value="Top">Top</option>
+              <option value="Bottom">Bottom</option>
+              <option value="Side">Side</option>
+            </select>
+          </label>
 
-</div>
-  </section>
+          <label>Device IP reputation
+            <select name="device_ip_reputation" required>
+              <option value="Good">Good</option>
+              <option value="Suspicious">Suspicious</option>
+              <option value="Bad">Bad</option>
+            </select>
+          </label>
 
-</main>
+          <h3>Click behaviour</h3>
 
-<footer>
-  <p>Final-year project · UVCE · ML pipeline based on Alzahrani, Aljabri &amp; Mohammad (IEEE Access, 2025)</p>
-</footer>
+          <label>Click duration (seconds)
+            <input type="number" name="click_duration" min="0" max="18.28" step="0.01" value="2.5" required>
+          </label>
 
-<script src="script.js"></script>
+          <label>Scroll depth (0–99)
+            <input type="number" name="scroll_depth" min="0" max="99" step="1" value="50" required>
+          </label>
+
+          <label>Mouse movement
+            <input type="number" name="mouse_movement" min="0" max="499" step="1" value="250" required>
+          </label>
+
+          <label>Keystrokes detected
+            <input type="number" name="keystrokes_detected" min="0" max="49" step="1" value="20" required>
+          </label>
+
+          <label>Click frequency
+            <input type="number" name="click_frequency" min="1" max="9" step="1" value="3" required>
+          </label>
+
+          <label>Time since last click (seconds)
+            <input type="number" name="time_since_last_click" min="1" max="599" step="1" value="120" required>
+          </label>
+
+          <label>VPN usage
+            <select name="VPN_usage" required>
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+            </select>
+          </label>
+
+          <label>Proxy usage
+            <select name="proxy_usage" required>
+              <option value="0">No</option>
+              <option value="1">Yes</option>
+            </select>
+          </label>
+
+          <button type="submit" class="btn-primary">
+            Analyze this click
+          </button>
+        </form>
+
+        <form id="c2idtl-form" class="card form-card">
+          <h2>C2IDTL Click Attribution Demo</h2>
+          <p class="card-note">
+            Experimental CNN model based on the TalkingData attribution dataset.
+          </p>
+
+          <label>IP identifier
+            <input type="number" name="ip" min="0" value="12345" required>
+          </label>
+
+          <label>App ID
+            <input type="number" name="app" min="0" value="3" required>
+          </label>
+
+          <label>Device ID
+            <input type="number" name="device" min="0" value="1" required>
+          </label>
+
+          <label>Operating system ID
+            <input type="number" name="os" min="0" value="13" required>
+          </label>
+
+          <label>Channel ID
+            <input type="number" name="channel" min="0" value="101" required>
+          </label>
+
+          <label>Click time
+            <input type="datetime-local" name="click_time" value="2017-11-08T12:34:56" required>
+          </label>
+
+          <button type="submit" class="btn-primary">
+            Run C2IDTL Prediction
+          </button>
+
+          <div id="c2idtl-error" class="state-msg hidden"></div>
+          <div id="c2idtl-result" class="state-msg hidden"></div>
+        </form>
+
+
+        <div class="card result-card">
+          <h2>Result</h2>
+          <div id="result-empty" class="state-msg">Submit the form to screen a
+            click.</div>
+          <div id="result-content" class="hidden">
+            <div class="verdict" id="verdict-badge">—</div>
+            <div class="meter-wrap">
+              <div class="meter-track">
+                <div class="meter-fill" id="meter-fill"></div>
+              </div>
+              <span class="meter-label" id="meter-label">0%</span>
+            </div>
+            <div id="risk-interpretation" class="risk-interpretation">
+              <h3>Risk interpretation</h3>
+              <p id="risk-description"></p>
+            </div>
+            <h3>Behavioral signals</h3>
+            <ul id="factors-list" class="factors-list"></ul>
+          </div>
+          <div id="result-error" class="state-msg error hidden"></div>
+        </div>
+
+      </div>
+      <div class="card prediction-history-card">
+
+        <div class="history-header">
+          <div>
+            <h2>Recent prediction history</h2>
+            <p class="card-note">
+              Predictions generated during the current backend session.
+            </p>
+          </div>
+
+          <button type="button" id="reset-history" class="btn-secondary">
+            Reset session
+          </button>
+        </div>
+
+        <div class="history-filters">
+          <input type="search" id="history-search" placeholder="Search device, browser or OS..."
+            aria-label="Search prediction history">
+
+          <select id="history-status-filter" aria-label="Filter by prediction status">
+            <option value="all">All predictions</option>
+            <option value="Potentially Suspicious">Potentially
+              Suspicious</option>
+            <option value="Likely Legitimate">Likely Legitimate</option>
+          </select>
+
+          <select id="history-risk-filter" aria-label="Filter by risk level">
+            <option value="all">All risk levels</option>
+            <option value="high">High risk</option>
+            <option value="medium">Medium risk</option>
+            <option value="low">Low risk</option>
+            <option value="minimal">Minimal risk</option>
+          </select>
+        </div>
+
+        <div class="history-table-wrap">
+
+          <table id="prediction-history-table" class="data-table">
+
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Device Type</th>
+                <th>Browser</th>
+                <th>OS</th>
+                <th>Probability</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+
+            <tbody id="prediction-history-body">
+              <tr>
+                <td colspan="6">
+                  No predictions yet.
+                </td>
+              </tr>
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Final-year project · UVCE · ML pipeline based on Alzahrani, Aljabri
+      &amp; Mohammad (IEEE Access, 2025)</p>
+  </footer>
+
+  <script src="script.js"></script>
 </body>
+
 </html>

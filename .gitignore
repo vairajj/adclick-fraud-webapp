@@ -42,3 +42,32 @@ backend/model/model.pkl
 backend/model/scaler.pkl
 backend/model/features.json
 backend/model/stats.json
+
+# Fish/Python virtual environments
+.venv-*/
+
+# Local databases
+*.sqlite3
+
+# Generated experiment artifacts
+backend/c2idtl_experiment/images/
+backend/c2idtl_prototype_output/
+
+# Backup files
+*.bak# Large C2IDTL model checkpoints
+backend/c2idtl_experiment/models/*.pth
+
+# Local database
+backend/adclick_fraud.db
+
+# Project archive
+adclick-fraud-webapp.zip
+
+# Temporary application backups
+backend/app_lightgbm_backup.py
+backend/app_v2_backup.py
+backend/c2idtl_train_original_backup.py
+*.before_tie_fix.bak
+
+# Temporary training backup
+backend/train_v3_ip_validation.py.before_corrected_v3.bak

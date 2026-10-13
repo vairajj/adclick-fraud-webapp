@@ -1,46 +1,33 @@
 import os
-from datetime import datetime
-
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from c2idtl_predict import C2IDTLPredictor
 
-from pipeline import ClickHistory, V2_FEATURES, build_v2_features
+from database import engine, Base, get_db
+import models
 
-
-# ============================================================
-# Paths
-# ============================================================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_DIR = os.path.join(BASE_DIR, "model")
+MODEL_PATH = os.path.join(BASE_DIR, "model", "lightgbm.joblib")
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
-MODEL_PATH = os.path.join(
-    MODEL_DIR,
-    "v2_random_forest.joblib",
-)
-DATA_DIR = os.path.join(BASE_DIR, "data")
-
-RESULT_FILES = [
-    ("Baseline", "model_results_baseline.csv"),
-    ("V1", "model_results_v1.csv"),
-    ("V2", "model_results_v2.csv"),
-    ("V3 no-IP", "model_results_v3_no_ip.csv"),
-]
-
-
-# ============================================================
-# FastAPI
-# ============================================================
 
 app = FastAPI(
-    title="Ad Click Attribution & Suspicious Click Detection API",
-    version="2.0.0",
+    title="Ad Click Fraud Detection API",
+    description="Behavioural analysis and machine learning-based click fraud detection.",
+    version="3.0.0",
 )
+# Initialize database tables
+Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,30 +36,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ============================================================
-# Model + History
-# ============================================================
-
 _model = None
-history = ClickHistory()
+_c2idtl_model = None
 
-# Recent predictions for the current API session.
-prediction_history = []
-MAX_PREDICTION_HISTORY = 20
+
+def load_c2idtl_model():
+    global _c2idtl_model
+
+    if _c2idtl_model is None:
+        try:
+            _c2idtl_model = C2IDTLPredictor()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=f"C2IDTL model unavailable: {exc}",
+            ) from exc
+
+    return _c2idtl_model
+
 
 def load_model():
     global _model
 
     if _model is None:
-
         if not os.path.exists(MODEL_PATH):
             raise HTTPException(
                 status_code=503,
-                detail=(
-                    "V2 model not found. "
-                    "Expected backend/model/v2_random_forest.joblib"
-                ),
+                detail="LightGBM model not found.",
             )
 
         _model = joblib.load(MODEL_PATH)
@@ -80,149 +70,86 @@ def load_model():
     return _model
 
 
-def load_comparison_results():
-    """Read experiment metrics from the saved result CSVs."""
-    results = []
-
-    for version, filename in RESULT_FILES:
-        path = os.path.join(DATA_DIR, filename)
-
-        if not os.path.exists(path):
-            continue
-
-        frame = pd.read_csv(path)
-
-        for _, row in frame.iterrows():
-            results.append({
-                "version": version,
-                "model": str(row["Model"]),
-                "precision": float(row["Precision"]),
-                "recall": float(row["Recall"]),
-                "f1": float(row["F1"]),
-                "roc_auc": float(row["ROC_AUC"]),
-                "pr_auc": float(row["PR_AUC"]),
-                "deployed": version == "V2" and str(row["Model"]) == "Random Forest",
-            })
-
-    return results
-
-
-# ============================================================
-# Request
-# ============================================================
-
 class PredictRequest(BaseModel):
+    device_type: str = Field(..., pattern="^(Desktop|Mobile|Tablet)$")
+    browser: str = Field(..., pattern="^(Chrome|Edge|Firefox|Opera|Safari)$")
+    operating_system: str = Field(..., pattern="^(Android|Linux|Windows|iOS|macOS)$")
+    ad_position: str = Field(..., pattern="^(Bottom|Side|Top)$")
+    device_ip_reputation: str = Field(..., pattern="^(Bad|Good|Suspicious)$")
 
-    ip: int = Field(..., ge=0)
-    app: int = Field(..., ge=0)
-    device: int = Field(..., ge=0)
-    os: int = Field(..., ge=0)
-    channel: int = Field(..., ge=0)
+    click_duration: float = Field(..., ge=0, le=18.28)
+    scroll_depth: float = Field(..., ge=0, le=99)
+    mouse_movement: float = Field(..., ge=0, le=499)
+    keystrokes_detected: int = Field(..., ge=0, le=49)
+    click_frequency: int = Field(..., ge=1, le=9)
+    time_since_last_click: float = Field(..., ge=1, le=599)
+    VPN_usage: int = Field(..., ge=0, le=1)
+    proxy_usage: int = Field(..., ge=0, le=1)
 
-    click_time: datetime
-
-
-# ============================================================
-# Health
-# ============================================================
 
 @app.get("/api/health")
 def health():
-
     return {
         "status": "ok",
         "model_ready": os.path.exists(MODEL_PATH),
-        "model": "v2_random_forest",
-        "version": "2.0.0",
-        "history": history.stats(),
+        "model": "LightGBM",
+        "version": "3.0.0",
     }
 
-
-# ============================================================
-# Model information
-# ============================================================
 
 @app.get("/api/model")
 def model_info():
-
     return {
-        "model": "Random Forest",
-        "version": "V2",
-        "features": V2_FEATURES,
-        "feature_count": len(V2_FEATURES),
-        "threshold": 0.50,
-        "target": "is_attributed",
-        "target_note": (
-            "is_attributed represents attribution/app download "
-            "in the TalkingData dataset; it is not direct "
-            "ground-truth fraud."
-        ),
+        "model": "LightGBM",
+        "version": "New Kaggle dataset",
+        "target": "is_fraudulent",
+        "features": [
+            "click_duration",
+            "scroll_depth",
+            "mouse_movement",
+            "keystrokes_detected",
+            "click_frequency",
+            "time_since_last_click",
+            "VPN_usage",
+            "proxy_usage",
+            "device_type",
+            "browser",
+            "operating_system",
+            "ad_position",
+            "device_ip_reputation",
+            "click_hour",
+            "click_day",
+            "click_month",
+        ],
+        "warning": "Experimental model. Dataset labels and predictive features require independent validation.",
     }
 
-
-# ============================================================
-# Statistics
-# ============================================================
-
-@app.get("/api/stats")
-def stats():
-
-    load_model()
-
-    return {
-        "model": "V2 Random Forest",
-        "model_ready": True,
-        "feature_count": len(V2_FEATURES),
-        "features": V2_FEATURES,
-        "threshold": 0.50,
-        "history": history.stats(),
-
-        "performance": {
-            "roc_auc": 0.977599,
-            "pr_auc": 0.300797,
-            "precision": 0.212871,
-            "recall": 0.728814,
-            "f1": 0.329502,
-        },
-        "comparison": load_comparison_results(),
-    }
-
-
-# ============================================================
-# Prediction
-# ============================================================
 
 @app.post("/api/predict")
-def predict(req: PredictRequest):
-
+def predict(
+    request: PredictRequest,
+    db: Session = Depends(get_db),
+):
     model = load_model()
 
     try:
+        data = request.model_dump()
 
-        # Build historical features BEFORE recording
-        # the current click.
-        feature_row = build_v2_features(
-            history=history,
-            ip=req.ip,
-            app=req.app,
-            device=req.device,
-            os_value=req.os,
-            channel=req.channel,
-            click_time=req.click_time,
-        )
+        now = datetime.now()
+        data["click_hour"] = now.hour
+        data["click_day"] = now.weekday()
+        data["click_month"] = now.month
 
-        feature_row = feature_row[V2_FEATURES]
+        feature_row = pd.DataFrame([data])
 
-        probability = float(
-            model.predict_proba(feature_row)[0][1]
-        )
+        probability = float(model.predict_proba(feature_row)[0][1])
 
         threshold = 0.50
 
         if probability >= threshold:
-            label = "Attributed / Suspicious Pattern"
+            label = "Potentially Suspicious"
         else:
-            label = "Not Attributed / Lower Risk Pattern"
+            label = "Likely Legitimate"
 
         if probability >= 0.75:
             risk = "high"
@@ -233,145 +160,130 @@ def predict(req: PredictRequest):
         else:
             risk = "minimal"
 
-        # Behavioral signals
-        signals = [
-            {
-                "feature": "ip_prev_clicks",
-                "value": float(
-                    feature_row.iloc[0]["ip_prev_clicks"]
-                ),
-                "description": "Previous clicks from this IP",
-            },
-            {
-                "feature": "app_prev_clicks",
-                "value": float(
-                    feature_row.iloc[0]["app_prev_clicks"]
-                ),
-                "description": "Previous clicks from this app",
-            },
-            {
-                "feature": "ip_app_prev_clicks",
-                "value": float(
-                    feature_row.iloc[0]["ip_app_prev_clicks"]
-                ),
-                "description": (
-                    "Previous clicks from this IP/app combination"
-                ),
-            },
-            {
-                "feature": "ip_device_prev_clicks",
-                "value": float(
-                    feature_row.iloc[0]["ip_device_prev_clicks"]
-                ),
-                "description": (
-                    "Previous clicks from this IP/device combination"
-                ),
-            },
-            {
-                "feature": "seconds_since_prev_ip_click",
-                "value": float(
-                    feature_row.iloc[0][
-                        "seconds_since_prev_ip_click"
-                    ]
-                ),
-                "description": (
-                    "Time since previous click from this IP"
-                ),
-            },
-        ]
-
-        # Record current click AFTER prediction.
-        history.record_click(
-            ip=req.ip,
-            app=req.app,
-            device=req.device,
-            os_value=req.os,
-            channel=req.channel,
-            click_time=pd.Timestamp(req.click_time),
+        # Save prediction to SQLite
+        new_prediction = models.Prediction(
+            **request.model_dump(),
+            probability=probability,
+            label=label,
+            risk=risk,
         )
 
-         # Store a lightweight record of this prediction.
-        prediction_history.append({
-            "click_time": req.click_time.isoformat(),
-            "ip": req.ip,
-            "app": req.app,
-            "device": req.device,
-            "channel": req.channel,
-            "probability": probability,
-            "label": label,
-            "risk": risk,
-        })
-
-        # Keep only the most recent predictions.
-        if len(prediction_history) > MAX_PREDICTION_HISTORY:
-            del prediction_history[:-MAX_PREDICTION_HISTORY]
+        db.add(new_prediction)
+        db.commit()
+        db.refresh(new_prediction)
 
         return {
             "probability": probability,
+            "probability_percent": round(probability * 100, 2),
             "threshold": threshold,
             "label": label,
             "risk": risk,
-            "features": {
-                key: float(value)
-                for key, value in feature_row.iloc[0].items()
-            },
-            "behavioral_signals": signals,
-            "history": history.stats(),
+            "model": "LightGBM",
+            "warning": "Experimental prediction; not independently validated for real-world fraud detection.",
         }
 
-    except ValueError as exc:
+    ##except Exception as e:
+        ##raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-    except Exception as exc:
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(exc)}",
-        )
-    
-
-
-
-# ============================================================
-# Reset history
-# ============================================================
 @app.get("/api/history/recent")
-def recent_history():
+def get_recent_history(db: Session = Depends(get_db)):
+    predictions = (
+        db.query(models.Prediction)
+        .order_by(models.Prediction.id.desc())
+        .limit(20)
+        .all()
+    )
 
     return {
-        "count": len(prediction_history),
-        "predictions": prediction_history,
+        "count": len(predictions),
+        "predictions": [
+            {
+                "id": p.id,
+                "click_time": p.click_time.isoformat(),
+                "device_type": p.device_type,
+                "browser": p.browser,
+                "operating_system": p.operating_system,
+                "probability": p.probability,
+                "label": p.label,
+                "risk": p.risk,
+            }
+            for p in predictions
+        ],
     }
+
+
+@app.get("/api/dashboard/stats")
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    predictions = db.query(models.Prediction).all()
+
+    total = len(predictions)
+
+    suspicious = sum(1 for p in predictions if p.label == "Potentially Suspicious")
+
+    legitimate = sum(1 for p in predictions if p.label == "Likely Legitimate")
+
+    average_probability = (
+        sum(p.probability for p in predictions) / total if total > 0 else 0
+    )
+
+    risk_distribution = {
+        "high": sum(1 for p in predictions if p.risk == "high"),
+        "medium": sum(1 for p in predictions if p.risk == "medium"),
+        "low": sum(1 for p in predictions if p.risk == "low"),
+        "minimal": sum(1 for p in predictions if p.risk == "minimal"),
+    }
+
+    return {
+        "total_predictions": total,
+        "suspicious_clicks": suspicious,
+        "legitimate_clicks": legitimate,
+        "average_probability": round(average_probability, 4),
+        "risk_distribution": risk_distribution,
+    }
+
 
 @app.post("/api/history/reset")
-def reset_history():
+def reset_history(db: Session = Depends(get_db)):
+    deleted_count = db.query(models.Prediction).delete()
 
-    history.clear()
-    prediction_history.clear()
+    db.commit()
 
     return {
-        "status": "ok",
-        "message": "Click history and prediction history have been reset.",
-        "history": history.stats(),
-        "prediction_count": 0,
+        "message": "Prediction history cleared successfully.",
+        "deleted_count": deleted_count,
     }
 
+class C2IDTLPredictRequest(BaseModel):
+    ip: int = Field(..., ge=0)
+    app: int = Field(..., ge=0)
+    device: int = Field(..., ge=0)
+    os: int = Field(..., ge=0)
+    channel: int = Field(..., ge=0)
+    click_time: datetime
 
-# ============================================================
-# Frontend
-# ============================================================
+
+@app.post("/api/c2idtl/predict")
+def c2idtl_predict(request: C2IDTLPredictRequest):
+    predictor = load_c2idtl_model()
+
+    try:
+        return predictor.predict(request.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"C2IDTL prediction failed: {exc}",
+        ) from exc
+
 
 if os.path.isdir(FRONTEND_DIR):
-
     app.mount(
         "/",
-        StaticFiles(
-            directory=FRONTEND_DIR,
-            html=True,
-        ),
+        StaticFiles(directory=FRONTEND_DIR, html=True),
         name="frontend",
     )
