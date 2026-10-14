@@ -295,3 +295,68 @@ For a viva, explain the data/target distinction first, then the
 leakage-aware chronological features, class-imbalance metrics, why a
 held-out test set is necessary, and how the API exposes the model checkpoint
 and warning text without changing prediction semantics.
+
+## Setup and Installation
+
+### Prerequisites
+
+- Python 3.12 (recommended for this project)
+- Git
+- pip
+- Internet connection for installing dependencies
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/vairajj/adclick-fraud.git
+cd adclick-fraud
+```
+
+### 2. Create a virtual environment
+
+**Linux (CachyOS, Arch Linux, Ubuntu):**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+If creating the environment fails on an Arch-based distribution, install the required Python and venv support packages using your distribution's package manager.
+
+**Windows (PowerShell):**
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r backend/requirements.txt
+```
+
+### 4. Start the backend
+
+```bash
+cd backend
+python -m uvicorn app:app --reload
+```
+
+The API will be available at:
+
+- API: http://127.0.0.1:8000
+- Interactive API documentation: http://127.0.0.1:8000/docs
+
+### 5. Stop the backend
+
+Press `Ctrl+C` in the terminal.
+
+### Notes
+
+- Create a separate virtual environment on each computer; do not copy the `.venv` directory between computers.
+- Install the dependencies from `backend/requirements.txt` on each computer.
+- PyTorch installation may differ depending on the operating system and whether CPU or CUDA acceleration is required.
+- Ensure any required model files, datasets, environment variables, and database configuration are available before starting the application.
+
