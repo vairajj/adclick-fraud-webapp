@@ -129,6 +129,7 @@
     <!-- ============ LIVE PREDICTOR ============ -->
     <section id="predictor" class="panel-view">
       <div class="predictor-grid">
+        <div class="predictor-cards">
 
         <form id="predict-form" class="card form-card">
           <h2>Check a click</h2>
@@ -228,28 +229,6 @@
           </button>
         </form>
 
-        <div class="card result-card">
-          <h2>Result</h2>
-          <div id="result-empty" class="state-msg">Submit the form to screen a
-            click.</div>
-          <div id="result-content" class="hidden">
-            <div class="verdict" id="verdict-badge">—</div>
-            <div class="meter-wrap">
-              <div class="meter-track">
-                <div class="meter-fill" id="meter-fill"></div>
-              </div>
-              <span class="meter-label" id="meter-label">0%</span>
-            </div>
-            <div id="risk-interpretation" class="risk-interpretation">
-              <h3>Risk interpretation</h3>
-              <p id="risk-description"></p>
-            </div>
-            <h3>Behavioral signals</h3>
-            <ul id="factors-list" class="factors-list"></ul>
-          </div>
-          <div id="result-error" class="state-msg error hidden"></div>
-        </div>
-
         <form id="c2idtl-form" class="card form-card">
           <h2>C2IDTL Click Attribution Demo</h2>
           <p class="card-note">
@@ -286,8 +265,48 @@
 
           <div id="c2idtl-error" class="state-msg hidden"></div>
         </form>
+        </div>
 
-        <div id="c2idtl-result" class="state-msg hidden"></div>
+        <div id="lgbm-result-modal" class="result-modal hidden" role="dialog"
+          aria-modal="true" aria-labelledby="lgbm-result-title">
+          <div class="result-modal-backdrop" data-close-modal></div>
+          <div class="result-modal-dialog">
+            <button type="button" class="modal-close" data-close-modal
+              aria-label="Close LightGBM result">&times;</button>
+            <div class="card result-card">
+              <h2 id="lgbm-result-title">LightGBM result</h2>
+              <div id="result-empty" class="state-msg">Submit the form to screen a
+                click.</div>
+              <div id="result-content" class="hidden">
+                <div class="verdict" id="verdict-badge">—</div>
+                <div class="meter-wrap">
+                  <div class="meter-track">
+                    <div class="meter-fill" id="meter-fill"></div>
+                  </div>
+                  <span class="meter-label" id="meter-label">0%</span>
+                </div>
+                <div id="risk-interpretation" class="risk-interpretation">
+                  <h3>Risk interpretation</h3>
+                  <p id="risk-description"></p>
+                </div>
+                <h3>Behavioral signals</h3>
+                <ul id="factors-list" class="factors-list"></ul>
+              </div>
+              <div id="result-error" class="state-msg error hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="c2idtl-result-modal" class="result-modal hidden" role="dialog"
+          aria-modal="true" aria-labelledby="c2idtl-result-title">
+          <div class="result-modal-backdrop" data-close-modal></div>
+          <div class="result-modal-dialog">
+            <button type="button" class="modal-close" data-close-modal
+              aria-label="Close C2IDTL result">&times;</button>
+            <h2 id="c2idtl-result-title" class="modal-heading">C2IDTL result</h2>
+            <div id="c2idtl-result" class="state-msg hidden"></div>
+          </div>
+        </div>
 
         <section class="card c2idtl-history-section">
           <div class="section-heading">
