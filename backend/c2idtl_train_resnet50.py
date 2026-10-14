@@ -1,6 +1,10 @@
 
 from pathlib import Path
+import argparse
+import json
+import random
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -13,6 +17,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     roc_auc_score,
+    confusion_matrix,
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -22,8 +27,15 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 16
-EPOCHS = 3
-LEARNING_RATE = 1e-5
+DEFAULT_EPOCHS = 3
+DEFAULT_LEARNING_RATE = 1e-5
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 class ClickImageDataset(Dataset):
@@ -73,8 +85,55 @@ class ClickImageDataset(Dataset):
         return image, label
 
 
+def evaluate(model, loader, device):
+    model.eval()
+    probabilities, labels = [], []
+    with torch.no_grad():
+        for images, batch_labels in loader:
+            logits = model(images.to(device, non_blocking=True))
+            probabilities.extend(
+                torch.sigmoid(logits).cpu().squeeze(1).tolist()
+            )
+            labels.extend(batch_labels.tolist())
+    return labels, probabilities
+
+
+def select_threshold(labels, probabilities):
+    rows = []
+    for threshold in np.linspace(0.01, 0.99, 197):
+        predictions = [int(p >= threshold) for p in probabilities]
+        rows.append((
+            f1_score(labels, predictions, zero_division=0),
+            float(threshold),
+        ))
+    return max(rows)
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="Train the C2IDTL ResNet50 attribution model."
+    )
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=DEFAULT_LEARNING_RATE,
+    )
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+    parser.add_argument(
+        "--output-name",
+        default="resnet50_best.pth",
+        help="Checkpoint filename under c2idtl_experiment/models.",
+    )
+    args = parser.parse_args()
+    set_seed(args.seed)
+
     print(f"Device: {DEVICE}")
+    print(f"Seed: {args.seed}")
+    print(f"Epochs: {args.epochs}")
+    print(f"Learning rate: {args.learning_rate}")
+    print(f"Batch size: {args.batch_size}")
 
     train_dataset = ClickImageDataset("train")
     val_dataset = ClickImageDataset("validation")
@@ -82,21 +141,21 @@ def main():
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=args.batch_size,
         shuffle=True,
         num_workers=2,
         pin_memory=(DEVICE.type == "cuda"),
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=args.batch_size,
         shuffle=False,
         num_workers=2,
         pin_memory=(DEVICE.type == "cuda"),
     )
     test_loader = DataLoader(
         test_dataset,
-        batch_size=BATCH_SIZE,
+        batch_size=args.batch_size,
         shuffle=False,
         num_workers=2,
         pin_memory=(DEVICE.type == "cuda"),
@@ -137,13 +196,15 @@ def main():
     # Optimize the new classifier only.
     optimizer = torch.optim.Adam(
         model.fc.parameters(),
-        lr=LEARNING_RATE,
+        lr=args.learning_rate,
     )
 
-    best_val_loss = float("inf")
-    best_path = OUTPUT_DIR / "resnet50_best.pth"
+    best_val_pr_auc = float("-inf")
+    best_path = OUTPUT_DIR / args.output_name
+    metrics_path = best_path.with_suffix(".json")
 
-    for epoch in range(EPOCHS):
+    history = []
+    for epoch in range(args.epochs):
         model.train()
         total_loss = 0.0
 
@@ -186,58 +247,67 @@ def main():
 
         val_loss /= len(val_dataset)
         val_auc = roc_auc_score(val_labels, val_probs)
+        val_pr_auc = average_precision_score(val_labels, val_probs)
+        history.append({
+            "epoch": epoch + 1,
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "val_roc_auc": val_auc,
+            "val_pr_auc": val_pr_auc,
+        })
 
         print(
             f"Epoch {epoch + 1}/{EPOCHS} | "
             f"train_loss={train_loss:.4f} | "
             f"val_loss={val_loss:.4f} | "
-            f"val_auc={val_auc:.4f}"
+            f"val_auc={val_auc:.4f} | "
+            f"val_pr_auc={val_pr_auc:.4f}"
         )
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if val_pr_auc > best_val_pr_auc:
+            best_val_pr_auc = val_pr_auc
             torch.save(model.state_dict(), best_path)
 
-    # Evaluate the best checkpoint at threshold 0.5.
+    # Evaluate the best checkpoint. Select the classification threshold on
+    # validation data only, then apply it once to the held-out test split.
     model.load_state_dict(
         torch.load(best_path, map_location=DEVICE)
     )
-    model.eval()
+    val_labels, val_probs = evaluate(model, val_loader, DEVICE)
+    test_labels, test_probs = evaluate(model, test_loader, DEVICE)
+    val_f1, threshold = select_threshold(val_labels, val_probs)
+    predictions = [int(p >= threshold) for p in test_probs]
+    test_metrics = {
+        "roc_auc": roc_auc_score(test_labels, test_probs),
+        "pr_auc": average_precision_score(test_labels, test_probs),
+        "precision": precision_score(
+            test_labels, predictions, zero_division=0
+        ),
+        "recall": recall_score(test_labels, predictions, zero_division=0),
+        "f1": f1_score(test_labels, predictions, zero_division=0),
+        "confusion_matrix": confusion_matrix(
+            test_labels, predictions
+        ).tolist(),
+    }
 
-    test_probs, test_labels = [], []
+    print(f"\nValidation-selected threshold: {threshold:.2f}")
+    print(f"Validation F1 at threshold: {val_f1:.4f}")
+    print("\nHeld-out test metrics:")
+    for metric, value in test_metrics.items():
+        print(f"{metric}: {value}")
 
-    with torch.no_grad():
-        for images, labels in test_loader:
-            images = images.to(DEVICE, non_blocking=True)
-            logits = model(images)
-
-            test_probs.extend(
-                torch.sigmoid(logits)
-                .cpu().squeeze(1).tolist()
-            )
-            test_labels.extend(labels.tolist())
-
-    predictions = [int(p >= 0.5) for p in test_probs]
-
-    print("\nTest metrics at threshold 0.5:")
-    print(f"ROC-AUC: {roc_auc_score(test_labels, test_probs):.4f}")
-    print(
-        f"PR-AUC: "
-        f"{average_precision_score(test_labels, test_probs):.4f}"
-    )
-    print(
-        f"Precision: "
-        f"{precision_score(test_labels, predictions, zero_division=0):.4f}"
-    )
-    print(
-        f"Recall: "
-        f"{recall_score(test_labels, predictions, zero_division=0):.4f}"
-    )
-    print(
-        f"F1-score: "
-        f"{f1_score(test_labels, predictions, zero_division=0):.4f}"
-    )
+    metrics_path.write_text(json.dumps({
+        "seed": args.seed,
+        "epochs": args.epochs,
+        "learning_rate": args.learning_rate,
+        "checkpoint": str(best_path),
+        "validation_threshold": threshold,
+        "validation_f1": val_f1,
+        "history": history,
+        "test": test_metrics,
+    }, indent=2))
     print(f"Saved checkpoint: {best_path}")
+    print(f"Saved metrics: {metrics_path}")
 
 
 if __name__ == "__main__":

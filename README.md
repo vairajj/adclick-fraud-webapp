@@ -171,3 +171,54 @@ TalkingData Clickstream Dataset
        Web Dashboard
               ↓
       Live Prediction System
+```
+
+## C2IDTL ResNet50 experiment
+
+The C2IDTL attribution model uses a fixed, stratified 60/20/20
+train/validation/held-out-test split (`random_state=42`). Numeric click
+features are converted to a 224 x 224 grayscale feature-block image, copied
+across RGB channels, and normalized with the ImageNet transform expected by
+ResNet50. Training-only medians, scaling, and feature allocation are recorded
+in `backend/c2idtl_experiment/feature_importance.csv`.
+
+The original checkpoint trained only the classifier head for three epochs at
+`1e-5`. A controlled experiment kept the same architecture, split, class
+weighting, and augmentation but trained for five epochs at `1e-3` with seed
+42. The improved checkpoint is saved separately as
+`backend/c2idtl_experiment/models/resnet50_lr1e3_best.pth`; it does not
+overwrite `resnet50_best.pth`. Configuration and measured results are
+recorded in
+`backend/c2idtl_experiment/resnet50_lr1e3_experiment.json`.
+
+| Held-out test metric | Original (`0.50`) | Improved (`0.79` validation threshold) |
+| --- | ---: | ---: |
+| ROC-AUC | 0.7351 | 0.8331 |
+| PR-AUC | 0.0106 | 0.0364 |
+| Precision | 0.0070 | 0.0756 |
+| Recall | 0.4222 | 0.2000 |
+| F1 | 0.0138 | 0.1098 |
+
+The improved threshold is selected on validation data only. The attribution
+probability remains the model's raw sigmoid output; changing the threshold
+does not inflate displayed probabilities. C2IDTL scores represent
+`is_attributed` likelihood, not verified fraud probability.
+
+### Reproduce the experiment
+
+From the repository root, with the C2IDTL virtual environment configured:
+
+```bash
+cd backend
+python c2idtl_train.py
+python c2idtl_train_resnet50.py \
+  --epochs 5 \
+  --learning-rate 0.001 \
+  --batch-size 64 \
+  --seed 42 \
+  --output-name resnet50_lr1e3_best.pth
+```
+
+The API automatically selects `resnet50_lr1e3_best.pth` when it exists and
+falls back to `resnet50_best.pth` for rollback. Set `C2IDTL_MODEL_PATH` to
+explicitly select either checkpoint.

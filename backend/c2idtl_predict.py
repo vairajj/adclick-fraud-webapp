@@ -1,5 +1,7 @@
 
 from pathlib import Path
+import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -14,7 +16,18 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "train_sample.csv"
 EXPERIMENT_DIR = BASE_DIR / "c2idtl_experiment"
 IMAGE_DIR = EXPERIMENT_DIR / "images"
-MODEL_PATH = EXPERIMENT_DIR / "models" / "resnet50_best.pth"
+MODEL_DIR = EXPERIMENT_DIR / "models"
+BASELINE_MODEL_PATH = MODEL_DIR / "resnet50_best.pth"
+IMPROVED_MODEL_PATH = MODEL_DIR / "resnet50_lr1e3_best.pth"
+MODEL_PATH = Path(os.getenv(
+    "C2IDTL_MODEL_PATH",
+    str(IMPROVED_MODEL_PATH if IMPROVED_MODEL_PATH.exists()
+        else BASELINE_MODEL_PATH),
+))
+METRICS_PATH = MODEL_PATH.with_suffix(".json")
+EXPERIMENT_METADATA_PATH = (
+    EXPERIMENT_DIR / "resnet50_lr1e3_experiment.json"
+)
 IMPORTANCE_PATH = EXPERIMENT_DIR / "feature_importance.csv"
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -202,6 +215,17 @@ class C2IDTLPredictor:
             load_preprocessing()
         )
         self.model = build_model()
+        self.threshold = 0.5
+        metadata_path = (
+            METRICS_PATH
+            if METRICS_PATH.exists()
+            else EXPERIMENT_METADATA_PATH
+        )
+        if metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text())
+            self.threshold = float(
+                metadata.get("validation_threshold", self.threshold)
+            )
 
     def predict(self, click):
         image = row_to_image(
@@ -220,12 +244,13 @@ class C2IDTLPredictor:
         return {
             "probability": round(float(probability), 6),
             "probability_percent": round(float(probability) * 100, 2),
-            "predicted_class": int(probability >= 0.5),
+            "predicted_class": int(probability >= self.threshold),
             "label_meaning": {
                 "0": "Not attributed",
                 "1": "Attributed",
             },
             "model": "C2IDTL-inspired ResNet50",
+            "decision_threshold": self.threshold,
             "warning": (
                 "Experimental. is_attributed is an attribution label, "
                 "not independently verified click fraud."

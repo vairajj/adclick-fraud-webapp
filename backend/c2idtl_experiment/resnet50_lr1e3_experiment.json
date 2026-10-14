@@ -1,0 +1,48 @@
+{
+  "experiment": "resnet50_head_lr1e3",
+  "seed": 42,
+  "split": {
+    "strategy": "stratified train_test_split",
+    "random_state": 42,
+    "train_rows": 59999,
+    "validation_rows": 20000,
+    "test_rows": 20000,
+    "train_positive": 136,
+    "validation_positive": 46,
+    "test_positive": 45
+  },
+  "preprocessing": {
+    "feature_artifact": "feature_importance.csv",
+    "scaler": "MinMaxScaler fit on training split",
+    "image_size": 224,
+    "input_representation": "flat proportional grayscale feature blocks duplicated across RGB channels"
+  },
+  "training": {
+    "backbone": "ImageNet-pretrained ResNet50 frozen",
+    "classifier": "512 -> ReLU -> 64 -> ReLU -> Dropout(0.25) -> 1",
+    "epochs": 5,
+    "learning_rate": 0.001,
+    "batch_size": 64,
+    "loss": "BCEWithLogitsLoss with training-only positive class weight",
+    "augmentation": "RandomAffine shear/scale and RandomHorizontalFlip on training images"
+  },
+  "checkpoint": "models/resnet50_lr1e3_best.pth",
+  "validation_threshold": 0.79,
+  "validation_f1": 0.11891891891891893,
+  "test_metrics": {
+    "roc_auc": 0.8330554859545087,
+    "pr_auc": 0.0364073469094816,
+    "precision": 0.07563025210084033,
+    "recall": 0.2,
+    "f1": 0.10975609756097561,
+    "confusion_matrix": [[19845, 110], [36, 9]]
+  },
+  "baseline_test_metrics": {
+    "roc_auc": 0.7350950750299283,
+    "pr_auc": 0.010565611631810632,
+    "precision_at_0_5": 0.007024029574861368,
+    "recall_at_0_5": 0.4222222222222222,
+    "f1_at_0_5": 0.013818181818181818,
+    "confusion_matrix_at_0_5": [[17269, 2686], [26, 19]]
+  }
+}
