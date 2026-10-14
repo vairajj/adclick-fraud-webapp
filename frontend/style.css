@@ -306,10 +306,16 @@ main {
 
 /* ---------- predictor ---------- */
 .predictor-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.predictor-grid > .card,
+.predictor-grid > form,
+.predictor-grid > [id="c2idtl-result"] {
+  width: 100%;
+  min-width: 0;
 }
 
 .form-card label {
@@ -629,6 +635,10 @@ footer {
   text-align: left;
 }
 
+#c2idtl-result:not(.hidden) {
+  margin-bottom: 16px;
+}
+
 .c2idtl-result-eyebrow {
   margin: 0 0 6px;
   font-size: 0.78rem;
@@ -690,4 +700,65 @@ footer {
   .c2idtl-score {
     font-size: 2rem;
   }
+}
+
+
+/* C2IDTL prediction history layout */
+.c2idtl-history-section {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.c2idtl-history-section .table-container {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: 1.5rem;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.c2idtl-history-section table {
+  width: max-content;
+  min-width: 900px;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.c2idtl-history-section th,
+.c2idtl-history-section td {
+  white-space: nowrap;
+}
+
+.c2idtl-history-section th,
+.c2idtl-history-section td {
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.c2idtl-history-section th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.c2idtl-history-section th,
+.c2idtl-history-section td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.c2idtl-history-section th:first-child,
+.c2idtl-history-section td:first-child {
+  min-width: 50px;
+  padding-left: 12px;
+}
+
+.c2idtl-history-section tbody tr:hover {
+  background: #f8fafc;
 }

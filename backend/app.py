@@ -266,19 +266,89 @@ class C2IDTLPredictRequest(BaseModel):
     click_time: datetime
 
 
+
 @app.post("/api/c2idtl/predict")
-def c2idtl_predict(request: C2IDTLPredictRequest):
+def c2idtl_predict(
+    request: C2IDTLPredictRequest,
+    db: Session = Depends(get_db),
+):
     predictor = load_c2idtl_model()
 
     try:
-        return predictor.predict(request.model_dump())
+        result = predictor.predict(request.model_dump())
+
+        # Support either a dictionary or a Pydantic response object.
+        if hasattr(result, "model_dump"):
+            result_data = result.model_dump()
+        elif isinstance(result, dict):
+            result_data = result
+        else:
+            raise TypeError("Unexpected C2IDTL prediction response format")
+
+        probability = result_data.get("probability")
+        predicted_class = result_data.get(
+            "predicted_class",
+            result_data.get("prediction"),
+        )
+
+        if probability is None or predicted_class is None:
+            raise ValueError(
+                "C2IDTL result must contain probability and predicted class"
+            )
+
+        record = models.C2IDTLPrediction(
+            click_time=request.click_time,
+            ip=request.ip,
+            app=request.app,
+            device=request.device,
+            os=request.os,
+            channel=request.channel,
+            probability=float(probability),
+            predicted_class=int(predicted_class),
+        )
+
+        db.add(record)
+        db.commit()
+
+        return result_data
+
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        db.rollback()
         raise HTTPException(
             status_code=500,
             detail=f"C2IDTL prediction failed: {exc}",
         ) from exc
+
+@app.get("/api/c2idtl/history")
+def c2idtl_history(db: Session = Depends(get_db)):
+    records = (
+        db.query(models.C2IDTLPrediction)
+        .order_by(models.C2IDTLPrediction.id.desc())
+        .limit(50)
+        .all()
+    )
+
+    return {
+        "count": len(records),
+        "predictions": [
+            {
+                "id": record.id,
+                "click_time": record.click_time.isoformat(),
+                "ip": record.ip,
+                "app": record.app,
+                "device": record.device,
+                "os": record.os,
+                "channel": record.channel,
+                "probability": record.probability,
+                "probability_percent": round(record.probability * 100, 2),
+                "predicted_class": record.predicted_class,
+            }
+            for record in records
+        ],
+    }
 
 
 if os.path.isdir(FRONTEND_DIR):

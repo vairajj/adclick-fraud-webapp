@@ -723,10 +723,84 @@ if (c2idtlForm) {
 `;
 
       resultElement.classList.remove("hidden");
-
+      await loadC2IDTLHistory();
+    } catch (error) {
+      console.error("C2IDTL prediction error:", error);
+      errorElement.textContent = error.message;
+      errorElement.classList.remove("hidden");
     } finally {
       button.disabled = false;
       button.textContent = "Run C2IDTL Prediction";
     }
   });
 }
+
+
+const c2idtlHistoryBody = document.getElementById("c2idtlHistoryBody");
+const c2idtlHistoryStatus = document.getElementById("c2idtlHistoryStatus");
+const refreshC2IDTLHistoryButton = document.getElementById(
+  "refreshC2IDTLHistory"
+);
+
+async function loadC2IDTLHistory() {
+  if (!c2idtlHistoryBody || !c2idtlHistoryStatus) return;
+
+  c2idtlHistoryStatus.textContent = "Loading C2IDTL history...";
+  refreshC2IDTLHistoryButton.disabled = true;
+
+  try {
+    const response = await fetch(`${API}/api/c2idtl/history`, {
+      headers: { Accept: "application/json" }
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Could not load C2IDTL history.");
+    }
+
+    c2idtlHistoryBody.replaceChildren();
+
+    for (const record of data.predictions || []) {
+      const row = document.createElement("tr");
+
+      const values = [
+        record.id,
+        record.click_time
+          ? new Date(record.click_time).toLocaleString()
+          : "—",
+        record.ip,
+        record.app,
+        record.device,
+        record.os,
+        record.channel,
+        `${Number(record.probability_percent ?? record.probability * 100).toFixed(2)}%`,
+        Number(record.predicted_class) === 1
+          ? "Attributed (1)"
+          : "Not attributed (0)"
+      ];
+
+      for (const value of values) {
+        const cell = document.createElement("td");
+        cell.textContent = String(value ?? "—");
+        row.appendChild(cell);
+      }
+
+      c2idtlHistoryBody.appendChild(row);
+    }
+
+    c2idtlHistoryStatus.textContent =
+      `Showing ${data.count ?? (data.predictions || []).length} saved C2IDTL prediction(s).`;
+  } catch (error) {
+    c2idtlHistoryStatus.textContent = error.message;
+  } finally {
+    refreshC2IDTLHistoryButton.disabled = false;
+  }
+}
+
+refreshC2IDTLHistoryButton?.addEventListener(
+  "click",
+  loadC2IDTLHistory
+);
+
+document.addEventListener("DOMContentLoaded", loadC2IDTLHistory);

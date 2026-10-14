@@ -31,3 +31,20 @@ class Prediction(Base):
     probability = Column(Float)
     label = Column(String(50))
     risk = Column(String(20))
+
+
+class C2IDTLPrediction(Base):
+    __tablename__ = "c2idtl_predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    click_time = Column(DateTime, nullable=False)
+
+    ip = Column(Integer, nullable=False)
+    app = Column(Integer, nullable=False)
+    device = Column(Integer, nullable=False)
+    os = Column(Integer, nullable=False)
+    channel = Column(Integer, nullable=False)
+
+    probability = Column(Float, nullable=False)
+    predicted_class = Column(Integer, nullable=False)
+
