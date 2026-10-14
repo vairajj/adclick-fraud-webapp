@@ -916,9 +916,14 @@ main {
 
 .form-card {
   position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 2px;
 }
 
 .form-card::before {
+  grid-column: 1 / -1;
   display: block;
   width: 42px;
   height: 4px;
@@ -931,6 +936,18 @@ main {
 .form-card label {
   color: #475467;
   font-weight: 500;
+}
+
+.form-card h2,
+.form-card > .card-note,
+.form-card h3,
+.form-card > .btn-primary,
+.form-card > .state-msg {
+  grid-column: 1 / -1;
+}
+
+.form-card h3 {
+  margin-top: 12px;
 }
 
 .form-card input,
@@ -1094,6 +1111,14 @@ footer {
   .section-heading .btn-primary,
   .history-header .btn-secondary {
     width: 100%;
+  }
+
+  .form-card {
+    display: block;
+  }
+
+  .form-card::before {
+    margin-bottom: 18px;
   }
 }
 
