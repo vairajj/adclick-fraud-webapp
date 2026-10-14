@@ -748,6 +748,9 @@ const c2idtlHistoryStatus = document.getElementById("c2idtlHistoryStatus");
 const refreshC2IDTLHistoryButton = document.getElementById(
   "refreshC2IDTLHistory"
 );
+const resetC2IDTLHistoryButton = document.getElementById(
+  "resetC2IDTLHistory"
+);
 
 async function loadC2IDTLHistory() {
   if (!c2idtlHistoryBody || !c2idtlHistoryStatus) return;
@@ -809,5 +812,34 @@ refreshC2IDTLHistoryButton?.addEventListener(
   "click",
   loadC2IDTLHistory
 );
+
+resetC2IDTLHistoryButton?.addEventListener("click", async () => {
+  if (!window.confirm(
+    "Reset all saved C2IDTL prediction history? This cannot be undone."
+  )) {
+    return;
+  }
+
+  resetC2IDTLHistoryButton.disabled = true;
+  c2idtlHistoryStatus.textContent = "Resetting C2IDTL history...";
+
+  try {
+    const response = await fetch(`${API}/api/c2idtl/history/reset`, {
+      method: "POST",
+      headers: { Accept: "application/json" }
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Could not reset C2IDTL history.");
+    }
+
+    await loadC2IDTLHistory();
+  } catch (error) {
+    c2idtlHistoryStatus.textContent = error.message;
+  } finally {
+    resetC2IDTLHistoryButton.disabled = false;
+  }
+});
 
 document.addEventListener("DOMContentLoaded", loadC2IDTLHistory);

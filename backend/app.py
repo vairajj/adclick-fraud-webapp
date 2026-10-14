@@ -351,6 +351,17 @@ def c2idtl_history(db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/c2idtl/history/reset")
+def reset_c2idtl_history(db: Session = Depends(get_db)):
+    deleted_count = db.query(models.C2IDTLPrediction).delete()
+    db.commit()
+
+    return {
+        "message": "C2IDTL prediction history cleared successfully.",
+        "deleted_count": deleted_count,
+    }
+
+
 if os.path.isdir(FRONTEND_DIR):
     app.mount(
         "/",

@@ -1036,6 +1036,16 @@ main {
   margin-top: 0;
 }
 
+.history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-actions .btn-secondary {
+  min-width: 112px;
+}
+
 .c2idtl-history-section .table-container,
 .history-table-wrap {
   margin-top: 14px;
@@ -1110,8 +1120,13 @@ footer {
   }
 
   .section-heading .btn-primary,
-  .history-header .btn-secondary {
+  .history-header .btn-secondary,
+  .history-actions {
     width: 100%;
+  }
+
+  .history-actions .btn-secondary {
+    flex: 1;
   }
 
   .form-card {
