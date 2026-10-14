@@ -6,8 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Ad Click Fraud Detection</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,5
-00;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -74,6 +73,40 @@
 
         </div>
 
+        <div class="dashboard-models">
+          <article class="card dashboard-model-card dashboard-model-card-primary">
+            <div class="dashboard-model-heading">
+              <span class="model-kicker">Fraud-risk model</span>
+              <span class="model-pill">Main risk model</span>
+            </div>
+            <h2>LightGBM</h2>
+            <p>
+              Estimates suspicious click risk from behavioural, device, and
+              network signals.
+            </p>
+            <div class="dashboard-model-meta">
+              <span>Target: <strong>is_fraudulent</strong></span>
+              <span>Output: <strong>Risk score</strong></span>
+            </div>
+          </article>
+
+          <article class="card dashboard-model-card dashboard-model-card-secondary">
+            <div class="dashboard-model-heading">
+              <span class="model-kicker">Attribution model</span>
+              <span class="model-pill">Experimental</span>
+            </div>
+            <h2>C2IDTL · ResNet50</h2>
+            <p>
+              Estimates app attribution likelihood from TalkingData click
+              features. This is not verified fraud probability.
+            </p>
+            <div class="dashboard-model-meta">
+              <span>Checkpoint: <strong id="c2idtl-checkpoint">resnet50_lr1e3_best.pth</strong></span>
+              <span>Threshold: <strong id="c2idtl-threshold">79%</strong></span>
+            </div>
+          </article>
+        </div>
+
         <!-- ==================== LIVE PREDICTION ANALYTICS ==================== -->
 
         <div class="card live-analytics">
@@ -81,8 +114,7 @@
           <h2>Live Prediction Analytics</h2>
 
           <p class="card-note">
-            Statistics based on predictions generated during the current
-            session.
+            Statistics based on all predictions persisted by this backend.
             These are model predictions, not verified fraud outcomes.
           </p>
           <p class="card-note" id="model-warning"></p>
@@ -260,7 +292,8 @@
         <form id="c2idtl-form" class="card form-card">
           <h2>C2IDTL Click Attribution Demo</h2>
           <p class="card-note">
-            Experimental CNN model based on the TalkingData attribution dataset.
+            Experimental ResNet50 model for app attribution, not verified fraud
+            detection.
           </p>
 
           <label>IP identifier
@@ -335,7 +368,7 @@
                   <th>Device</th>
                   <th>OS</th>
                   <th>Channel</th>
-                  <th>Probability</th>
+                  <th>Attribution probability</th>
                   <th>Class</th>
                 </tr>
               </thead>
@@ -351,12 +384,12 @@
           <div>
             <h2>Recent prediction history</h2>
             <p class="card-note">
-              Predictions generated during the current backend session.
+              Predictions persisted by this backend across sessions.
             </p>
           </div>
 
           <button type="button" id="reset-history" class="btn-secondary">
-            Reset session
+            Reset saved predictions
           </button>
         </div>
 
@@ -413,8 +446,7 @@
   </main>
 
   <footer>
-    <p>Final-year project · UVCE · ML pipeline based on Alzahrani, Aljabri
-      &amp; Mohammad (IEEE Access, 2025)</p>
+    <p>Final-year project · UVCE</p>
   </footer>
 
   <script src="script.js"></script>

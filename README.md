@@ -222,3 +222,76 @@ python c2idtl_train_resnet50.py \
 The API automatically selects `resnet50_lr1e3_best.pth` when it exists and
 falls back to `resnet50_best.pth` for rollback. Set `C2IDTL_MODEL_PATH` to
 explicitly select either checkpoint.
+
+## Evaluation reference
+
+The checked-in `backend/model_comparison.csv` is the source for the
+LightGBM comparison below. These are the values recorded in that artifact
+(not newly trained results):
+
+| Model | Accuracy | Precision | Recall | F1 | ROC-AUC | PR-AUC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Random Forest | 0.752 | 0.0000 | 0.0000 | 0.0000 | 0.5243007893 | 0.2615024365 |
+| **LightGBM** | **0.613** | **0.2750809061** | **0.3427419355** | **0.3052064632** | **0.5261453329** | **0.2608519886** |
+| XGBoost | 0.615 | 0.2544802867 | 0.2862903226 | 0.2694497154 | 0.5159735329 | 0.2501167088 |
+| Logistic Regression | 0.486 | 0.2108695652 | 0.3911290323 | 0.2740112994 | 0.4430818892 | 0.2176630431 |
+
+The table is a historical evaluation artifact and should not be interpreted
+as a guarantee of production performance. The deployed LightGBM endpoint
+predicts the dataset field `is_fraudulent` from the separate click-fraud
+dataset. The C2IDTL endpoint predicts TalkingData `is_attributed` (whether
+an app download was attributed). `is_attributed` is **not** a fraud label;
+the two probabilities, targets, datasets, and metrics must not be compared
+as if they measured the same task.
+
+## Reproducible setup and run
+
+Use Python 3.10+ and create an environment from the repository root:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate                 # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+```
+
+Start the API (the committed LightGBM checkpoint is loaded lazily):
+
+```bash
+cd backend
+uvicorn app:app --reload
+```
+
+Open `http://127.0.0.1:8000/` for the dashboard or
+`http://127.0.0.1:8000/docs` for the API documentation. The API exposes
+`/api/health`, `/api/model`, `/api/predict`, `/api/dashboard/stats`, and
+the C2IDTL routes. `/api/dashboard/stats` reports **all predictions persisted
+in SQLite**, not only the current browser or server session. The reset
+control permanently deletes the corresponding saved history.
+
+The C2IDTL demo requires the additional packages used by
+`backend/c2idtl_predict.py` and a compatible checkpoint under
+`backend/c2idtl_experiment/models/`. It does not retrain when the API starts.
+Use `C2IDTL_MODEL_PATH` to select an existing checkpoint explicitly.
+
+## Limitations and viva guidance
+
+- Dataset labels are proxies: `is_fraudulent` comes from the click-fraud
+  dataset and `is_attributed` comes from TalkingData; neither is independently
+  verified ground-truth fraud.
+- Class imbalance makes accuracy misleading. Discuss precision, recall,
+  F1, ROC-AUC and especially PR-AUC together with the evaluation split.
+- Historical feature construction is chronological, but deployment data,
+  drift, unseen categories, and threshold calibration still require external
+  validation.
+- Dashboard counts are persisted prediction records, not confirmed incidents.
+  A probability is a model score, not proof that a user or click is
+  fraudulent.
+- The committed model files are inference artifacts. Reproducing a training
+  experiment requires the original data, pinned dependencies, split/seed,
+  preprocessing configuration, and the training scripts; training is
+  intentionally not part of API startup.
+
+For a viva, explain the data/target distinction first, then the
+leakage-aware chronological features, class-imbalance metrics, why a
+held-out test set is necessary, and how the API exposes the model checkpoint
+and warning text without changing prediction semantics.

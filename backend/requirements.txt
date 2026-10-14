@@ -1,7 +1,31 @@
+
+# API
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
+
+# Data processing
 pandas==2.2.2
 numpy==1.26.4
+
+# Traditional machine learning
 scikit-learn==1.5.2
 joblib==1.4.2
+
+# Database
+SQLAlchemy>=2.0,<3.0
+
+# Deep learning — C2IDTL / ResNet50
+torch
+torchvision
+lightgbm
+
+# Image processing
+Pillow
+
+# Configuration and environment variables
+python-dotenv
+
+# Testing
+pytest
+httpx

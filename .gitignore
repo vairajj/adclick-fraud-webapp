@@ -71,3 +71,8 @@ backend/c2idtl_train_original_backup.py
 
 # Temporary training backup
 backend/train_v3_ip_validation.py.before_corrected_v3.bak
+
+# Academic documents kept locally
+*.pptx
+*.docx
+*.pdf

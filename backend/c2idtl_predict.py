@@ -250,6 +250,7 @@ class C2IDTLPredictor:
                 "1": "Attributed",
             },
             "model": "C2IDTL-inspired ResNet50",
+            "checkpoint": MODEL_PATH.name,
             "decision_threshold": self.threshold,
             "warning": (
                 "Experimental. is_attributed is an attribution label, "

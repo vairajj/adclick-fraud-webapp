@@ -64,7 +64,12 @@ async function loadDashboard() {
       model.model || "LightGBM";
 
     document.getElementById("best-model-sub").textContent =
-      "Experimental behavioural fraud detection model";
+      `Experimental ${model.target || "attribution"} model · checkpoint: ${model.checkpoint || "not reported"}`;
+
+    const checkpoint = document.getElementById("c2idtl-checkpoint");
+    if (checkpoint && model.c2idtl_checkpoint) {
+      checkpoint.textContent = model.c2idtl_checkpoint;
+    }
 
     // Live prediction statistics
     document.getElementById("stat-rows").textContent =
@@ -697,6 +702,11 @@ if (c2idtlForm) {
         : "Not attributed (class 0)";
 
       const score = Number(result.probability_percent);
+      const threshold = Number(result.decision_threshold);
+      const thresholdPercent = Number.isFinite(threshold)
+        ? `${(threshold * 100).toFixed(0)}%`
+        : "N/A";
+      const checkpoint = result.checkpoint || "Configured checkpoint";
 
       resultElement.innerHTML = `
       <div class="c2idtl-result-card">
@@ -717,6 +727,17 @@ if (c2idtlForm) {
           <p class="c2idtl-prediction">
             <strong>Predicted class:</strong> ${attribution}
           </p>
+
+          <dl class="c2idtl-details">
+            <div>
+              <dt>Decision threshold</dt>
+              <dd>${thresholdPercent}</dd>
+            </div>
+            <div>
+              <dt>Checkpoint</dt>
+              <dd>${checkpoint}</dd>
+            </div>
+          </dl>
 
           <p class="c2idtl-method">
             Click features → feature-importance image → ResNet50

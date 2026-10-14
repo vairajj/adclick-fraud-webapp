@@ -1,6 +1,7 @@
 import os
 import joblib
 import pandas as pd
+from pathlib import Path
 
 from datetime import datetime
 
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from c2idtl_predict import C2IDTLPredictor
+from c2idtl_predict import C2IDTLPredictor, MODEL_PATH as C2IDTL_MODEL_PATH
 
 from database import engine, Base, get_db
 import models
@@ -18,6 +19,7 @@ import models
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model", "lightgbm.joblib")
+MODEL_CHECKPOINT = Path(MODEL_PATH).name
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
 
@@ -94,6 +96,8 @@ def health():
         "model_ready": os.path.exists(MODEL_PATH),
         "model": "LightGBM",
         "version": "3.0.0",
+        "checkpoint": MODEL_CHECKPOINT,
+        "c2idtl_checkpoint": C2IDTL_MODEL_PATH.name,
     }
 
 
@@ -101,7 +105,9 @@ def health():
 def model_info():
     return {
         "model": "LightGBM",
-        "version": "New Kaggle dataset",
+        "version": "3.0.0",
+        "checkpoint": MODEL_CHECKPOINT,
+        "c2idtl_checkpoint": C2IDTL_MODEL_PATH.name,
         "target": "is_fraudulent",
         "features": [
             "click_duration",
@@ -179,6 +185,8 @@ def predict(
             "label": label,
             "risk": risk,
             "model": "LightGBM",
+            "version": "3.0.0",
+            "checkpoint": MODEL_CHECKPOINT,
             "warning": "Experimental prediction; not independently validated for real-world fraud detection.",
         }
 
@@ -238,6 +246,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     }
 
     return {
+        "scope": "all persisted predictions",
         "total_predictions": total,
         "suspicious_clicks": suspicious,
         "legitimate_clicks": legitimate,
