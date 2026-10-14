@@ -1,23 +1,9 @@
 
 const API = "";
 
-function showResultModal(id) {
+function showInlineResult(id) {
   document.getElementById(id)?.classList.remove("hidden");
-  document.body.classList.add("modal-open");
 }
-
-function closeResultModal(modal) {
-  modal.classList.add("hidden");
-  if (!document.querySelector(".result-modal:not(.hidden)")) {
-    document.body.classList.remove("modal-open");
-  }
-}
-
-document.querySelectorAll(".result-modal").forEach(modal => {
-  modal.querySelectorAll("[data-close-modal]").forEach(closeButton => {
-    closeButton.addEventListener("click", () => closeResultModal(modal));
-  });
-});
 
 // ============================================================
 // Tabs
@@ -181,7 +167,7 @@ if (predictForm) {
       }
 
       renderResult(result, payload);
-      showResultModal("lgbm-result-modal");
+      showInlineResult("lgbm-result-panel");
       await loadDashboard();
       await loadPredictionHistory();
 
@@ -190,6 +176,7 @@ if (predictForm) {
 
       errorElement.textContent = err.message;
       errorElement.classList.remove("hidden");
+      showInlineResult("lgbm-result-panel");
 
     } finally {
       submitButton.disabled = false;
@@ -742,7 +729,7 @@ if (c2idtlForm) {
 `;
 
       resultElement.classList.remove("hidden");
-      showResultModal("c2idtl-result-modal");
+      showInlineResult("c2idtl-result-panel");
       await loadC2IDTLHistory();
     } catch (error) {
       console.error("C2IDTL prediction error:", error);
